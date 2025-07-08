@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block content %}
+<h3>Материали</h3>
+
+<!-- Покажи flash-съобщения -->
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% if messages %}
+    {% for category, msg in messages %}
+      <div class="alert alert-{{category}}">{{ msg }}</div>
+    {% endfor %}
+  {% endif %}
+{% endwith %}
+
+<!-- Форма за импорт -->
+<form action="{{ url_for('materials.import_excel') }}" method="post" enctype="multipart/form-data" class="mb-3">
+  <input type="file" name="file" accept=".xlsx" required>
+  <button type="submit" class="btn btn-primary">Импорт от Excel</button>
+</form>
+
+<!-- Таблицата -->
+<table class="table table-striped">
+  <thead>
+    <tr>
+      {% for col in columns %}
+        <th>{{ col }}</th>
+      {% endfor %}
+    </tr>
+  </thead>
+  <tbody>
+    {% for row in rows %}
+      <tr>
+        {% for col in columns %}
+          <td>{{ row[col] }}</td>
+        {% endfor %}
+      </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

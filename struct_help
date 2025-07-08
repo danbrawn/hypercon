@@ -1,0 +1,22 @@
+beton-mvp/
+├── config.ini
+├── requirements.txt
+├── run.py
+├── app/
+│   ├── __init__.py
+│   ├── config.py
+│   ├── models.py
+│   ├── routes_materials.py
+│   └── templates/
+│       ├── base.html
+│       └── materials.html
+└── migrations/        ← създава се от `flask db init`
+
+
+config.ini съдържа всички детайли: host, port, user, password, database, schema, table.
+
+config.py чете тези стойности и формира DB_URI, MATERIALS_TABLE и MATERIALS_SCHEMA.
+
+models.py дефинира Material = Table(...) с reflection (autoload_with=db.engine).
+
+routes_materials.py ползва Core-style Material.select(), .delete() и .insert(), без да докосва колони в кода.
