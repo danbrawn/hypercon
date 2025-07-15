@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block content %}
+<h3>Управление на клиенти</h3>
+
+<form method="post" class="mb-3">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <div class="row g-2">
+    <div class="col">
+      <input name="name" class="form-control" placeholder="Client Name" required>
+    </div>
+    <div class="col">
+      <input name="schema_name" class="form-control" placeholder="Schema Name" required>
+    </div>
+    <div class="col-auto">
+      <button class="btn btn-success">Добави</button>
+    </div>
+  </div>
+</form>
+
+<ul class="list-group">
+  {% for c in clients %}
+    <li class="list-group-item">{{ c.name }} → {{ c.schema_name }}</li>
+  {% endfor %}
+</ul>
+{% endblock %}

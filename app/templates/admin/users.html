@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block content %}
+<h3>Управление на потребители</h3>
+
+<form method="post" class="mb-3">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <div class="row g-2">
+    <div class="col">
+      <input name="username" class="form-control" placeholder="Username" required>
+    </div>
+    <div class="col">
+      <input name="password" class="form-control" placeholder="Password" required>
+    </div>
+    <div class="col">
+      <select name="role" class="form-select">
+        <option value="operator">Operator</option>
+        <option value="admin">Admin</option>
+      </select>
+    </div>
+    <div class="col">
+      <select name="client_id" class="form-select">
+        <option value="">— Admin (no client)</option>
+        {% for c in clients %}
+          <option value="{{ c.id }}">{{ c.name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="col-auto">
+      <button class="btn btn-success">Добави</button>
+    </div>
+  </div>
+</form>
+
+<ul class="list-group">
+  {% for u in users %}
+    <li class="list-group-item">
+      {{ u.username }} ({{ u.role }})
+      {% if u.client %}– {{ u.client.name }}{% endif %}
+    </li>
+  {% endfor %}
+</ul>
+{% endblock %}
