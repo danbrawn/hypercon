@@ -1,39 +1,37 @@
 {% extends "base.html" %}
 {% block content %}
-<h3>Материали</h3>
+  <div class="mb-3">
+    <strong>Схема:</strong> {{ schema }}<br>
+    <strong>Таблица:</strong> {{ table_name }}
+  </div>
 
-<!-- Покажи flash-съобщения -->
-{% with messages = get_flashed_messages(with_categories=true) %}
-  {% if messages %}
-    {% for category, msg in messages %}
-      <div class="alert alert-{{category}}">{{ msg }}</div>
-    {% endfor %}
-  {% endif %}
-{% endwith %}
+  <h3>Материали</h3>
 
-<!-- Форма за импорт -->
-<form action="{{ url_for('materials.import_excel') }}" method="post" enctype="multipart/form-data" class="mb-3">
-  <input type="file" name="file" accept=".xlsx" required>
-  <button type="submit" class="btn btn-primary">Импорт от Excel</button>
-</form>
+  <form action="{{ url_for('materials.import_excel') }}"
+        method="post"
+        enctype="multipart/form-data"
+        class="mb-3">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="file" name="file" accept=".xlsx" required>
+    <button class="btn btn-secondary">Импорт от Excel</button>
+  </form>
 
-<!-- Таблицата -->
-<table class="table table-striped">
-  <thead>
-    <tr>
-      {% for col in columns %}
-        <th>{{ col }}</th>
-      {% endfor %}
-    </tr>
-  </thead>
-  <tbody>
-    {% for row in rows %}
+  <table class="table table-striped">
+    <thead>
       <tr>
         {% for col in columns %}
-          <td>{{ row[col] }}</td>
+          <th>{{ col }}</th>
         {% endfor %}
       </tr>
-    {% endfor %}
-  </tbody>
-</table>
+    </thead>
+    <tbody>
+      {% for row in rows %}
+        <tr>
+          {% for col in columns %}
+            <td>{{ row[col] }}</td>
+          {% endfor %}
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
 {% endblock %}

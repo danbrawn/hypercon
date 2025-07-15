@@ -1,13 +1,11 @@
 import configparser, os
+from pathlib import Path
 
 cfg = configparser.ConfigParser()
-cfg.read(os.path.join(os.path.dirname(__file__), os.pardir, "config.ini"))
+cfg.read(Path(__file__).parent.parent / "config.ini")
 
-db_cfg = cfg["database"]
-
+db = cfg["database"]
 DB_URI = (
-    f"postgresql+psycopg2://{db_cfg['user']}:{db_cfg['password']}"
-    f"@{db_cfg['host']}:{db_cfg.get('port','5432')}/{db_cfg['database']}"
+    f"postgresql+psycopg2://{db['user']}:{db['password']}"
+    f"@{db['host']}:{db.get('port',5432)}/{db['database']}"
 )
-MATERIALS_TABLE = db_cfg["materials_table"]
-MATERIALS_SCHEMA = db_cfg.get("schema") or None

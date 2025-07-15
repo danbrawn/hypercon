@@ -1,28 +1,30 @@
 from . import db
-from .config import MATERIALS_TABLE
-from . import db
 from flask_login import UserMixin
-from werkzeug.security import generate_password_hash, check_password_hash
 
-class Material(db.Model):
-    __tablename__ = MATERIALS_TABLE
+class Client(db.Model):
+    __tablename__ = "clients"
+    __table_args__ = {'schema': 'main'}
 
-    id    = db.Column(db.Integer, primary_key=True)
-    name  = db.Column(db.String(120), unique=True, nullable=False)
-    price = db.Column(db.Float, nullable=False)
-
-    def __repr__(self):
-        return f"<Material {self.id}: {self.name}, {self.price}>"
-
+    id          = db.Column(db.Integer, primary_key=True)
+    name        = db.Column(db.String,  unique=True, nullable=False)
+    schema_name = db.Column(db.String,  unique=True, nullable=False)
 
 class User(db.Model, UserMixin):
     __tablename__ = "users"
-    id             = db.Column(db.Integer,   primary_key=True)
-    username       = db.Column(db.String(80), unique=True, nullable=False)
-    password_hash  = db.Column(db.String(128), nullable=False)
-    role           = db.Column(db.String(20), nullable=False, default="operator")
-    # helper-и за паролата
+    __table_args__ = {'schema': 'main'}
+
+    id            = db.Column(db.Integer, primary_key=True)
+    username      = db.Column(db.String(80), unique=True, nullable=False)
+    password_hash = db.Column(db.Text,      nullable=False)
+    role          = db.Column(db.String(20), nullable=False, default="operator")
+    client_id     = db.Column(db.Integer, db.ForeignKey("main.clients.id"))
+
+    client        = db.relationship("Client", backref="users")
+
     def set_password(self, pw):
-        self.password_hash = generate_password_hash(pw)
+        from flask_bcrypt import generate_password_hash
+        self.password_hash = generate_password_hash(pw).decode()
+
     def check_password(self, pw):
+        from flask_bcrypt import check_password_hash
         return check_password_hash(self.password_hash, pw)

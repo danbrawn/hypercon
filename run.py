@@ -1,7 +1,17 @@
 from app import create_app
+from waitress import serve
+import logging
+
+# минимум логинг
+logging.basicConfig(level=logging.INFO)
+
 app = create_app()
 
 if __name__ == "__main__":
-    # отпечатваме URL map-а
-    print(app.url_map)
-    app.run(host="0.0.0.0", port=5000, debug=True, use_reloader=False)
+    serve(
+      app,
+      host="0.0.0.0",
+      port=5000,
+      expose_tracebacks=True,       # показва traceback на грешки в конзолата
+      channel_timeout=120
+    )
