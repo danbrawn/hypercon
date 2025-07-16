@@ -68,6 +68,9 @@ def create_app():
     # ── Инициализиране на extensions ─────────────────────────────────────────
     db.init_app(app)
     login_manager.init_app(app)
+    login_manager.login_view = "auth.login"
+    login_manager.login_message = "Моля, влезте, за да продължите."
+    login_manager.login_message_category = "warning"
     bcrypt.init_app(app)
     csrf.init_app(app)
 

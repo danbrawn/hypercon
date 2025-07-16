@@ -2,7 +2,7 @@ from flask import Blueprint, request, render_template, flash, redirect, url_for,
 import pandas as pd
 from sqlalchemy import MetaData, Table, select, text
 from . import db
-from flask_login import current_user
+from flask_login import current_user,login_required
 
 bp = Blueprint("materials", __name__)
 
@@ -13,8 +13,12 @@ def get_materials_table():
     return Table("materials_grit", meta, autoload_with=db.engine)
 
 @bp.route("/materials")
+@login_required
 def page_materials():
-    tbl = get_materials_table()
+    # вече сме сигурни, че current_user има атрибут role
+    sch = session.get("schema") if current_user.role == "operator" else "main"
+    tbl = Table(f"materials_grit", MetaData(), schema=sch, autoload_with=db.engine)
+    #tbl = get_materials_table()
     # Покажи коя схема и коя таблица ползваме
     current_schema = tbl.schema or "public"
     table_name     = tbl.name
