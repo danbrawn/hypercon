@@ -74,6 +74,14 @@ def create_app():
     bcrypt.init_app(app)
     csrf.init_app(app)
 
+    @app.after_request
+    def add_security_headers(response):
+        # Забраняваме кеширане:
+        response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+        response.headers["Pragma"] = "no-cache"
+        response.headers["Expires"] = "0"
+        return response
+
     # ── Регистрация на user_loader ──────────────────────────────────────────
     @login_manager.user_loader
     def load_user(user_id):
