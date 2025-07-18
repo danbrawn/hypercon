@@ -7,7 +7,7 @@ werkzeug.urls.url_encode = lambda q, charset='utf-8', separator='&': urllib.pars
 import os
 import logging
 from logging.handlers import RotatingFileHandler
-from flask import Flask, redirect, url_for, session
+from flask import Flask, redirect, url_for, session, send_from_directory
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, current_user
 from flask_bcrypt import Bcrypt
@@ -36,11 +36,12 @@ class RequestLoggerMiddleware:
 
 def create_app():
     app = Flask(__name__)
-    app.config.update(
+    app.config.update(static_folder='static', static_url_path='',
         SQLALCHEMY_DATABASE_URI        = DB_URI,
         SQLALCHEMY_TRACK_MODIFICATIONS = False,
         SECRET_KEY                     = os.environ.get("SECRET_KEY", "change_me_for_prod"),
-        WTF_CSRF_TIME_LIMIT            = None
+        WTF_CSRF_TIME_LIMIT            = None,
+        SEND_FILE_MAX_AGE_DEFAULT = 0  # за development
     )
 
     # ── Настройка на логване ─────────────────────────────────────────────────
@@ -130,6 +131,11 @@ def create_app():
         if not current_user.is_authenticated:
             return redirect(url_for("auth.login"))
         return redirect(url_for("materials.page_materials"))
+
+    @app.route('/favicon.ico')
+    def favicon():
+        return send_from_directory(os.path.join(app.root_path, 'static'), 'favicon.ico',
+                                   mimetype='image/vnd.microsoft.icon')
 
     # ── Обгръщаме с middleware за лог на заявките ───────────────────────────
     return RequestLoggerMiddleware(app)

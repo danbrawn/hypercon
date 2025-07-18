@@ -10,7 +10,7 @@ app = create_app()
 if __name__ == "__main__":
     serve(
       app,
-      host="0.0.0.0",
+      host="127.0.0.1",
       port=5000,
       expose_tracebacks=True,       # показва traceback на грешки в конзолата
       channel_timeout=120
