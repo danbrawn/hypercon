@@ -1,0 +1,486 @@
+Index: app/models.py
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.BaseRevisionTextPatchEP
+<+>from . import db\r\nfrom .config import MATERIALS_TABLE\r\nfrom . import db\r\nfrom flask_login import UserMixin\r\nfrom werkzeug.security import generate_password_hash, check_password_hash\r\n\r\nclass Material(db.Model):\r\n    __tablename__ = MATERIALS_TABLE\r\n\r\n    id    = db.Column(db.Integer, primary_key=True)\r\n    name  = db.Column(db.String(120), unique=True, nullable=False)\r\n    price = db.Column(db.Float, nullable=False)\r\n\r\n    def __repr__(self):\r\n        return f\"<Material {self.id}: {self.name}, {self.price}>\"\r\n\r\n\r\nclass User(db.Model, UserMixin):\r\n    __tablename__ = \"users\"\r\n    id             = db.Column(db.Integer,   primary_key=True)\r\n    username       = db.Column(db.String(80), unique=True, nullable=False)\r\n    password_hash  = db.Column(db.String(128), nullable=False)\r\n    role           = db.Column(db.String(20), nullable=False, default=\"operator\")\r\n    # helper-и за паролата\r\n    def set_password(self, pw):\r\n        self.password_hash = generate_password_hash(pw)\r\n    def check_password(self, pw):\r\n        return check_password_hash(self.password_hash, pw)
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/app/models.py b/app/models.py
+--- a/app/models.py	(revision 1321849c22d9aa27443fcf35641173225c3b08e0)
++++ b/app/models.py	(date 1752064784683)
+@@ -1,28 +1,30 @@
+-from . import db
+-from .config import MATERIALS_TABLE
+ from . import db
+ from flask_login import UserMixin
+-from werkzeug.security import generate_password_hash, check_password_hash
+ 
+-class Material(db.Model):
+-    __tablename__ = MATERIALS_TABLE
++class Client(db.Model):
++    __tablename__ = "clients"
++    __table_args__ = {'schema': 'main'}
+ 
+-    id    = db.Column(db.Integer, primary_key=True)
+-    name  = db.Column(db.String(120), unique=True, nullable=False)
+-    price = db.Column(db.Float, nullable=False)
+-
+-    def __repr__(self):
+-        return f"<Material {self.id}: {self.name}, {self.price}>"
+-
++    id          = db.Column(db.Integer, primary_key=True)
++    name        = db.Column(db.String,  unique=True, nullable=False)
++    schema_name = db.Column(db.String,  unique=True, nullable=False)
+ 
+ class User(db.Model, UserMixin):
+     __tablename__ = "users"
+-    id             = db.Column(db.Integer,   primary_key=True)
+-    username       = db.Column(db.String(80), unique=True, nullable=False)
+-    password_hash  = db.Column(db.String(128), nullable=False)
+-    role           = db.Column(db.String(20), nullable=False, default="operator")
+-    # helper-и за паролата
++    __table_args__ = {'schema': 'main'}
++
++    id            = db.Column(db.Integer, primary_key=True)
++    username      = db.Column(db.String(80), unique=True, nullable=False)
++    password_hash = db.Column(db.Text,      nullable=False)
++    role          = db.Column(db.String(20), nullable=False, default="operator")
++    client_id     = db.Column(db.Integer, db.ForeignKey("main.clients.id"))
++
++    client        = db.relationship("Client", backref="users")
++
+     def set_password(self, pw):
+-        self.password_hash = generate_password_hash(pw)
++        from flask_bcrypt import generate_password_hash
++        self.password_hash = generate_password_hash(pw).decode()
++
+     def check_password(self, pw):
+-        return check_password_hash(self.password_hash, pw)
+\ No newline at end of file
++        from flask_bcrypt import check_password_hash
++        return check_password_hash(self.password_hash, pw)
+Index: app/__init__.py
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.BaseRevisionTextPatchEP
+<+>from flask import Flask\r\nfrom flask_sqlalchemy import SQLAlchemy\r\nfrom .config import DB_URI\r\n\r\ndb = SQLAlchemy()\r\n\r\ndef create_app():\r\n    app = Flask(__name__)\r\n    app.config[\"SQLALCHEMY_DATABASE_URI\"]    = DB_URI\r\n    app.config[\"SQLALCHEMY_TRACK_MODIFICATIONS\"] = False\r\n    app.config[\"SECRET_KEY\"] = \"change_me\"\r\n\r\n    db.init_app(app)\r\n\r\n    # автоматично създава само ако НЕ съществува (но при reflection не е нужен)\r\n    with app.app_context():\r\n        db.create_all()\r\n\r\n    from .routes_materials import bp as materials_bp\r\n    app.register_blueprint(materials_bp)\r\n\r\n    return app\r\n
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/app/__init__.py b/app/__init__.py
+--- a/app/__init__.py	(revision 1321849c22d9aa27443fcf35641173225c3b08e0)
++++ b/app/__init__.py	(date 1752212624462)
+@@ -1,22 +1,86 @@
+-from flask import Flask
++# app/__init__.py
++
++# ○ monkey-patch за Flask-WTF + последен Werkzeug
++import urllib.parse, werkzeug.urls
++werkzeug.urls.url_encode = lambda q, charset='utf-8', separator='&': urllib.parse.urlencode(q, doseq=True)
++
++import os
++from flask import Flask, redirect, url_for, session
+ from flask_sqlalchemy import SQLAlchemy
++from flask_login import LoginManager, current_user
++from flask_bcrypt import Bcrypt
++from flask_wtf import CSRFProtect
++from sqlalchemy import text
+ from .config import DB_URI
+ 
+-db = SQLAlchemy()
++# ── Extensions ─────────────────────────────────────────────────────────────
++db            = SQLAlchemy()
++login_manager = LoginManager()
++bcrypt        = Bcrypt()
++csrf          = CSRFProtect()
+ 
+ def create_app():
+     app = Flask(__name__)
+-    app.config["SQLALCHEMY_DATABASE_URI"]    = DB_URI
+-    app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+-    app.config["SECRET_KEY"] = "change_me"
++    app.config.update(
++        SQLALCHEMY_DATABASE_URI        = DB_URI,
++        SQLALCHEMY_TRACK_MODIFICATIONS = False,
++        SECRET_KEY                     = os.environ.get("SECRET_KEY", "change_me_for_prod"),
++        WTF_CSRF_TIME_LIMIT            = None,
++        SESSION_COOKIE_SECURE=False,
++        SESSION_COOKIE_HTTPONLY = False,
++        SESSION_COOKIE_SAMESITE = 'Lax'
++    )
+ 
++    # ── Init extensions ────────────────────────────────────────────────────
+     db.init_app(app)
++    login_manager.init_app(app)
++    bcrypt.init_app(app)
++    csrf.init_app(app)
++
++    # ── Задължителен user_loader ──────────────────────────────────────────
++    @login_manager.user_loader
++    def load_user(user_id):
++        from .models import User
++        return User.query.get(int(user_id))
++
++    login_manager.login_view    = "auth.login"
++    login_manager.login_message = "Моля, влезте, за да продължите."
++
++    # ── CSRF и current_user достъпни в шаблоните ──────────────────────────
++    @app.context_processor
++    def inject_user():
++        return dict(current_user=current_user)
+ 
+-    # автоматично създава само ако НЕ съществува (но при reflection не е нужен)
++    # ── Тук задаваме search_path ПО ВРЕМЕ на всяка HTTP заявка ──────────
++    @app.before_request
++    def set_search_path():
++        # Ако оператор: session['schema'] е зададена на login
++        sch = session.get("schema")
++        if sch:
++            # main + clientX
++            db.session.execute(text(f"SET search_path TO main, {sch}"))
++        else:
++            # admin: само main
++            db.session.execute(text("SET search_path TO main"))
++
++    # ── Създаваме таблиците (MVP shortcut) ───────────────────────────────
+     with app.app_context():
+         db.create_all()
+ 
++    # ── Регистрираме всички Blueprints ───────────────────────────────────
++    from .routes_auth      import bp as auth_bp
++    from .routes_admin     import bp as admin_bp
+     from .routes_materials import bp as materials_bp
++
++    app.register_blueprint(auth_bp,      url_prefix="/auth")
++    app.register_blueprint(admin_bp,     url_prefix="/admin")
+     app.register_blueprint(materials_bp)
+ 
++    # ── Root redirect ─────────────────────────────────────────────────────
++    @app.route("/")
++    def index():
++        if not current_user.is_authenticated:
++            return redirect(url_for("auth.login"))
++        return redirect(url_for("materials.page_materials"))
++
+     return app
+Index: app/routes_materials.py
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.BaseRevisionTextPatchEP
+<+># app/routes_materials.py\r\n\r\nfrom flask import Blueprint, request, redirect, url_for, flash, render_template\r\nimport pandas as pd\r\nfrom sqlalchemy import MetaData, Table, text\r\n\r\nfrom . import db\r\nfrom .config import MATERIALS_TABLE, MATERIALS_SCHEMA\r\n\r\nbp = Blueprint(\"materials\", __name__)\r\n\r\ndef reflect_table():\r\n    meta = MetaData(schema=MATERIALS_SCHEMA)\r\n    return Table(\r\n        MATERIALS_TABLE,\r\n        meta,\r\n        autoload_with=db.engine\r\n    )\r\n\r\n@bp.route(\"/materials\")\r\ndef page_materials():\r\n    tbl = reflect_table()\r\n    rows = db.session.execute(tbl.select()).mappings().all()\r\n    cols = list(tbl.columns.keys())\r\n    nonnum = [c for c in cols if not c.isdigit()]\r\n    num    = sorted([c for c in cols if c.isdigit()], key=int)\r\n    columns = nonnum + num\r\n    return render_template(\"materials.html\", columns=columns, rows=rows)\r\n\r\n@bp.route(\"/materials/import\", methods=[\"POST\"])\r\ndef import_excel():\r\n    f = request.files.get(\"file\")\r\n    if not f:\r\n        flash(\"Не е избран файл.\", \"danger\")\r\n        return redirect(url_for(\"materials.page_materials\"))\r\n    try:\r\n        df = pd.read_excel(f)\r\n        df.columns = df.columns.map(str)\r\n    except Exception as e:\r\n        flash(f\"Грешка при четене на Excel: {e}\", \"danger\")\r\n        return redirect(url_for(\"materials.page_materials\"))\r\n\r\n    tbl = reflect_table()\r\n    existing = set(tbl.columns.keys())\r\n    # добавяме липсващи колони\r\n    for col in df.columns:\r\n        if col not in existing:\r\n            ddl = text(f'ALTER TABLE \"{MATERIALS_SCHEMA}\".\"{MATERIALS_TABLE}\" '\r\n                       f'ADD COLUMN \"{col}\" DOUBLE PRECISION')\r\n            db.session.execute(ddl)\r\n    db.session.commit()\r\n\r\n    # рефлектираме отново\r\n    tbl = reflect_table()\r\n\r\n    # определяме ключова колона\r\n    cols = list(tbl.columns.keys())\r\n    if \"material_name\" in cols:\r\n        keycol = \"material_name\"\r\n    else:\r\n        pks = [c.name for c in tbl.primary_key.columns]\r\n        keycol = pks[0] if pks else next((c for c in cols if not c.isdigit()), cols[0])\r\n\r\n    # upsert\r\n    for _, row in df.iterrows():\r\n        data = {col: row[col] for col in df.columns if col in cols and pd.notna(row[col])}\r\n        key = data.get(keycol)\r\n        if key is None:\r\n            continue\r\n        sel = tbl.select().where(tbl.c[keycol] == key)\r\n        if db.session.execute(sel).first():\r\n            upd = tbl.update().where(tbl.c[keycol] == key).values(**{k:v for k,v in data.items() if k!=keycol})\r\n            db.session.execute(upd)\r\n        else:\r\n            db.session.execute(tbl.insert().values(**data))\r\n    db.session.commit()\r\n\r\n    flash(\"Импортирано успешно.\", \"success\")\r\n    return redirect(url_for(\"materials.page_materials\"))\r\n
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/app/routes_materials.py b/app/routes_materials.py
+--- a/app/routes_materials.py	(revision 1321849c22d9aa27443fcf35641173225c3b08e0)
++++ b/app/routes_materials.py	(date 1752067700554)
+@@ -1,31 +1,38 @@
+ # app/routes_materials.py
+ 
+-from flask import Blueprint, request, redirect, url_for, flash, render_template
++from flask import Blueprint, request, render_template, flash, redirect, url_for, session
+ import pandas as pd
+-from sqlalchemy import MetaData, Table, text
+-
++from sqlalchemy import MetaData, Table, select, text
+ from . import db
+-from .config import MATERIALS_TABLE, MATERIALS_SCHEMA
++from flask_login import current_user
+ 
+ bp = Blueprint("materials", __name__)
+ 
+-def reflect_table():
+-    meta = MetaData(schema=MATERIALS_SCHEMA)
+-    return Table(
+-        MATERIALS_TABLE,
+-        meta,
+-        autoload_with=db.engine
+-    )
++def get_materials_table():
++    # 1) избираме schema: client (от сесия) или main за админ
++    sch = session.get("schema") if current_user.role=="operator" else "main"
++    # 2) чрез MetaData(schema=...) казваме къде да рефлектира
++    meta = MetaData(schema=sch)
++    return Table("materials_grit", meta, autoload_with=db.engine)
+ 
+ @bp.route("/materials")
+ def page_materials():
+-    tbl = reflect_table()
++    tbl = get_materials_table()
++   # Вземаме schema и името на таблицата от sqlalchemy.Table
++    current_schema = tbl.schema or "public"
++    table_name     = tbl.name
+     rows = db.session.execute(tbl.select()).mappings().all()
+     cols = list(tbl.columns.keys())
+     nonnum = [c for c in cols if not c.isdigit()]
+-    num    = sorted([c for c in cols if c.isdigit()], key=int)
++    num    = sorted([c for c in cols if c.isdigit()], key=lambda x: int(x))
+     columns = nonnum + num
+-    return render_template("materials.html", columns=columns, rows=rows)
++    return render_template(
++        "materials.html",
++        schema=current_schema,
++        table_name=table_name,
++        columns=columns,
++        rows=rows
++    )
+ 
+ @bp.route("/materials/import", methods=["POST"])
+ def import_excel():
+@@ -33,47 +40,50 @@
+     if not f:
+         flash("Не е избран файл.", "danger")
+         return redirect(url_for("materials.page_materials"))
++
+     try:
+         df = pd.read_excel(f)
+         df.columns = df.columns.map(str)
+     except Exception as e:
+-        flash(f"Грешка при четене на Excel: {e}", "danger")
++        flash(f"Грешка при четене: {e}", "danger")
+         return redirect(url_for("materials.page_materials"))
+ 
+-    tbl = reflect_table()
++    tbl = get_materials_table()
+     existing = set(tbl.columns.keys())
+-    # добавяме липсващи колони
++
++    # добавяне на нови колони, ако ги няма
+     for col in df.columns:
+         if col not in existing:
+-            ddl = text(f'ALTER TABLE "{MATERIALS_SCHEMA}"."{MATERIALS_TABLE}" '
+-                       f'ADD COLUMN "{col}" DOUBLE PRECISION')
++            ddl = text(
++                f'ALTER TABLE "{tbl.schema}"."{tbl.name}" '
++                f'ADD COLUMN "{col}" DOUBLE PRECISION'
++            )
+             db.session.execute(ddl)
+     db.session.commit()
+ 
+-    # рефлектираме отново
+-    tbl = reflect_table()
+-
+-    # определяме ключова колона
++    # презареждаме meta, за да хванем новите колони
++    tbl = get_materials_table()
+     cols = list(tbl.columns.keys())
+-    if "material_name" in cols:
+-        keycol = "material_name"
+-    else:
+-        pks = [c.name for c in tbl.primary_key.columns]
+-        keycol = pks[0] if pks else next((c for c in cols if not c.isdigit()), cols[0])
++    keycol = "material_name" if "material_name" in cols else cols[0]
+ 
+-    # upsert
+     for _, row in df.iterrows():
+-        data = {col: row[col] for col in df.columns if col in cols and pd.notna(row[col])}
++        data = {c: row[c] for c in df.columns if c in cols and pd.notna(row[c])}
+         key = data.get(keycol)
+         if key is None:
+             continue
+-        sel = tbl.select().where(tbl.c[keycol] == key)
+-        if db.session.execute(sel).first():
+-            upd = tbl.update().where(tbl.c[keycol] == key).values(**{k:v for k,v in data.items() if k!=keycol})
++
++        exists = db.session.execute(
++            select(tbl).where(tbl.c[keycol] == key)
++        ).first()
++
++        if exists:
++            upd = tbl.update()\
++                     .where(tbl.c[keycol] == key)\
++                     .values(**{k: v for k, v in data.items() if k != keycol})
+             db.session.execute(upd)
+         else:
+             db.session.execute(tbl.insert().values(**data))
++
+     db.session.commit()
+-
+     flash("Импортирано успешно.", "success")
+     return redirect(url_for("materials.page_materials"))
+Index: config.ini
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.BaseRevisionTextPatchEP
+<+>[database]\r\nhost = localhost\r\nport = 5432\r\nuser = postgres\r\npassword = postgres\r\ndatabase = hypercon\r\nschema     = materials_hypercon\r\nmaterials_table = materials_grit
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/config.ini b/config.ini
+--- a/config.ini	(revision 1321849c22d9aa27443fcf35641173225c3b08e0)
++++ b/config.ini	(date 1752064810669)
+@@ -1,8 +1,6 @@
+ [database]
+-host = localhost
+-port = 5432
+-user = postgres
++host     = localhost
++port     = 5432
++user     = postgres
+ password = postgres
+-database = hypercon
+-schema     = materials_hypercon
+-materials_table = materials_grit
+\ No newline at end of file
++database = postgres
+Index: app/config.py
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.BaseRevisionTextPatchEP
+<+>import configparser, os\r\n\r\ncfg = configparser.ConfigParser()\r\ncfg.read(os.path.join(os.path.dirname(__file__), os.pardir, \"config.ini\"))\r\n\r\ndb_cfg = cfg[\"database\"]\r\n\r\nDB_URI = (\r\n    f\"postgresql+psycopg2://{db_cfg['user']}:{db_cfg['password']}\"\r\n    f\"@{db_cfg['host']}:{db_cfg.get('port','5432')}/{db_cfg['database']}\"\r\n)\r\nMATERIALS_TABLE = db_cfg[\"materials_table\"]\r\nMATERIALS_SCHEMA = db_cfg.get(\"schema\") or None
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/app/config.py b/app/config.py
+--- a/app/config.py	(revision 1321849c22d9aa27443fcf35641173225c3b08e0)
++++ b/app/config.py	(date 1752064784713)
+@@ -1,13 +1,11 @@
+ import configparser, os
++from pathlib import Path
+ 
+ cfg = configparser.ConfigParser()
+-cfg.read(os.path.join(os.path.dirname(__file__), os.pardir, "config.ini"))
++cfg.read(Path(__file__).parent.parent / "config.ini")
+ 
+-db_cfg = cfg["database"]
+-
++db = cfg["database"]
+ DB_URI = (
+-    f"postgresql+psycopg2://{db_cfg['user']}:{db_cfg['password']}"
+-    f"@{db_cfg['host']}:{db_cfg.get('port','5432')}/{db_cfg['database']}"
++    f"postgresql+psycopg2://{db['user']}:{db['password']}"
++    f"@{db['host']}:{db.get('port',5432)}/{db['database']}"
+ )
+-MATERIALS_TABLE = db_cfg["materials_table"]
+-MATERIALS_SCHEMA = db_cfg.get("schema") or None
+\ No newline at end of file
+Index: run.py
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.BaseRevisionTextPatchEP
+<+>from app import create_app\r\napp = create_app()\r\n\r\nif __name__ == \"__main__\":\r\n    # отпечатваме URL map-а\r\n    print(app.url_map)\r\n    app.run(host=\"0.0.0.0\", port=5000, debug=True, use_reloader=False)
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/run.py b/run.py
+--- a/run.py	(revision 1321849c22d9aa27443fcf35641173225c3b08e0)
++++ b/run.py	(date 1752138031918)
+@@ -1,7 +1,9 @@
++# run.py
+ from app import create_app
++from waitress import serve
++
+ app = create_app()
+ 
+ if __name__ == "__main__":
+-    # отпечатваме URL map-а
+-    print(app.url_map)
+-    app.run(host="0.0.0.0", port=5000, debug=True, use_reloader=False)
+\ No newline at end of file
++    # this will block and serve your Flask app over HTTP on port 5000
++    serve(app, host="0.0.0.0", port=5000)
+Index: app/templates/materials.html
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.BaseRevisionTextPatchEP
+<+>{% extends \"base.html\" %}\r\n{% block content %}\r\n<h3>Материали</h3>\r\n\r\n<!-- Покажи flash-съобщения -->\r\n{% with messages = get_flashed_messages(with_categories=true) %}\r\n  {% if messages %}\r\n    {% for category, msg in messages %}\r\n      <div class=\"alert alert-{{category}}\">{{ msg }}</div>\r\n    {% endfor %}\r\n  {% endif %}\r\n{% endwith %}\r\n\r\n<!-- Форма за импорт -->\r\n<form action=\"{{ url_for('materials.import_excel') }}\" method=\"post\" enctype=\"multipart/form-data\" class=\"mb-3\">\r\n  <input type=\"file\" name=\"file\" accept=\".xlsx\" required>\r\n  <button type=\"submit\" class=\"btn btn-primary\">Импорт от Excel</button>\r\n</form>\r\n\r\n<!-- Таблицата -->\r\n<table class=\"table table-striped\">\r\n  <thead>\r\n    <tr>\r\n      {% for col in columns %}\r\n        <th>{{ col }}</th>\r\n      {% endfor %}\r\n    </tr>\r\n  </thead>\r\n  <tbody>\r\n    {% for row in rows %}\r\n      <tr>\r\n        {% for col in columns %}\r\n          <td>{{ row[col] }}</td>\r\n        {% endfor %}\r\n      </tr>\r\n    {% endfor %}\r\n  </tbody>\r\n</table>\r\n{% endblock %}\r\n
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/app/templates/materials.html b/app/templates/materials.html
+--- a/app/templates/materials.html	(revision 1321849c22d9aa27443fcf35641173225c3b08e0)
++++ b/app/templates/materials.html	(date 1752067700549)
+@@ -1,37 +1,24 @@
+ {% extends "base.html" %}
+ {% block content %}
++<div class="mb-3">
++<strong>Схема:</strong> {{ schema }}<br>
++<strong>Таблица:</strong> {{ table_name }}
++</div>
+ <h3>Материали</h3>
+-
+-<!-- Покажи flash-съобщения -->
+-{% with messages = get_flashed_messages(with_categories=true) %}
+-  {% if messages %}
+-    {% for category, msg in messages %}
+-      <div class="alert alert-{{category}}">{{ msg }}</div>
+-    {% endfor %}
+-  {% endif %}
+-{% endwith %}
+-
+-<!-- Форма за импорт -->
+-<form action="{{ url_for('materials.import_excel') }}" method="post" enctype="multipart/form-data" class="mb-3">
++<form action="{{ url_for('materials.import_excel') }}"
++      method="post" enctype="multipart/form-data" class="mb-3">
++  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+   <input type="file" name="file" accept=".xlsx" required>
+-  <button type="submit" class="btn btn-primary">Импорт от Excel</button>
++  <button class="btn btn-secondary">Импорт от Excel</button>
+ </form>
+-
+-<!-- Таблицата -->
+ <table class="table table-striped">
+-  <thead>
+-    <tr>
+-      {% for col in columns %}
+-        <th>{{ col }}</th>
+-      {% endfor %}
+-    </tr>
+-  </thead>
++  <thead><tr>
++    {% for col in columns %}<th>{{ col }}</th>{% endfor %}
++  </tr></thead>
+   <tbody>
+     {% for row in rows %}
+       <tr>
+-        {% for col in columns %}
+-          <td>{{ row[col] }}</td>
+-        {% endfor %}
++      {% for col in columns %}<td>{{ row[col] }}</td>{% endfor %}
+       </tr>
+     {% endfor %}
+   </tbody>
+Index: test.py
+===================================================================
+diff --git a/test.py b/test.py
+deleted file mode 100644
+--- a/test.py	(revision 1321849c22d9aa27443fcf35641173225c3b08e0)
++++ /dev/null	(revision 1321849c22d9aa27443fcf35641173225c3b08e0)
+@@ -1,9 +0,0 @@
+-from app import create_app, db, bcrypt
+-from app.models import User
+-
+-app = create_app()
+-with app.app_context():
+-    admin = User(username="admin", role="admin")
+-    admin.set_password("admin")
+-    db.session.add(admin)
+-    db.session.commit()
+\ No newline at end of file
+Index: app/templates/base.html
+===================================================================
+diff --git a/app/templates/base.html b/app/templates/base.html
+deleted file mode 100644
+--- a/app/templates/base.html	(revision 1321849c22d9aa27443fcf35641173225c3b08e0)
++++ /dev/null	(revision 1321849c22d9aa27443fcf35641173225c3b08e0)
+@@ -1,26 +0,0 @@
+-<!doctype html>
+-<html lang="bg">
+-<head>
+-  <meta charset="utf-8">
+-  <title>{{ title|default("Beton MVP") }}</title>
+-  <link rel="stylesheet"
+-        href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
+-</head>
+-<body class="p-4">
+-    <nav class="navbar navbar-expand navbar-light bg-light mb-4">
+-      <div class="container-fluid">
+-        <a class="navbar-brand" href="{{ url_for('materials.page_materials') }}">Beton</a>
+-        <ul class="navbar-nav ms-auto">
+-          {% if current_user.is_authenticated %}
+-            <li class="nav-item"><a class="nav-link" href="#">Здравей, {{ current_user.username }}!</a></li>
+-            <li class="nav-item"><a class="nav-link" href="{{ url_for('auth.logout') }}">Изход</a></li>
+-          {% else %}
+-            <li class="nav-item"><a class="nav-link" href="{{ url_for('auth.login') }}">Вход</a></li>
+-          {% endif %}
+-        </ul>
+-      </div>
+-    </nav>
+-  {% block content %}{% endblock %}
+-  {% block scripts %}{% endblock %}
+-</body>
+-</html>
