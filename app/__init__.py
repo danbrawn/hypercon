@@ -14,6 +14,8 @@ from flask_bcrypt import Bcrypt
 from flask_wtf import CSRFProtect
 from sqlalchemy import text
 from .config import DB_URI
+from .routes_optimize import bp as optimize_bp
+from . import tasks
 
 # ── Extensions ────────────────────────────────────────────────────────────────
 db            = SQLAlchemy()
@@ -138,4 +140,6 @@ def create_app():
                                    mimetype='image/vnd.microsoft.icon')
 
     # ── Обгръщаме с middleware за лог на заявките ───────────────────────────
+    app.register_blueprint(optimize_bp)
     return RequestLoggerMiddleware(app)
+
