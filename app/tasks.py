@@ -9,6 +9,6 @@ celery = Celery(
 
 @celery.task(bind=True)
 def optimize_task(self, params):
-    # Можете да докладвате прогрес:
+    # Можете да докладвате прогрес:)))
     # self.update_state(state='PROGRESS', meta={'percent': 50})
     return run_optimization(params)

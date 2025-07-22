@@ -13,7 +13,7 @@ def run_optimization(params):
     """
     Прави нелинейна регресия (curve_fit) на model_func спрямо данните в params.
 
-    Очаква params да е dict с ключове:
+    Очаква params да е dict с ключове:fdsd
       - 'x': списък или масив на x-стойности
       - 'y': списък или масив на y-стойности
       - (по избор) 'initial_guess': начално приближение [a0, b0, c0]
