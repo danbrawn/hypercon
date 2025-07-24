@@ -42,14 +42,14 @@ def load_data(params):
 
     Очаква params dict с ключове:
       - 'selected_ids': списък от избраните ID на материали
-      - 'constraints': {material_id: (min, max), ...}  # засега не се ползва
+      - 'constraints': [{'material_id': id, 'op': str, 'value': float}, ...]
+        напр. {material_id: 3, op: '>=', value: 0.2}
       - 'prop_min', 'prop_max': граници за включване на колони
-      - 'target_profile': желан профил за смесване
 
     Връща:
       - material_ids: list
       - property_values: np.ndarray(shape=(n, m))
-      - target_profile: np.ndarray(length=m)
+      - target_profile: np.ndarray(length=m)  # средни стойности на избраните материали
       - prop_columns: list
     """
     tbl = _get_materials_table()
@@ -63,12 +63,26 @@ def load_data(params):
     rows = db.session.execute(stmt).mappings().all()
 
     values = np.array([[row[c] for c in prop_cols] for row in rows], dtype=float)
-    target = np.array(params['target_profile'], dtype=float)
-    if target.size != len(prop_cols):
-        raise ValueError('target profile length mismatch')
+    target = np.mean(values, axis=0)
     ids = [row['id'] for row in rows]
 
-    return ids, values, target, prop_cols
+    constraint_map = {}
+    for c in params.get('constraints', []):
+        mid = c.get('material_id')
+        if mid in ids:
+            idx = ids.index(mid)
+            val = float(c.get('value', 0))
+            op = c.get('op')
+            lb, ub = constraint_map.get(idx, (0.0, 1.0))
+            if op == '=':
+                lb, ub = val, val
+            elif op == '>=':
+                lb = max(lb, val)
+            elif op == '<=':
+                ub = min(ub, val)
+            constraint_map[idx] = (lb, ub)
+
+    return ids, values, target, prop_cols, constraint_map
 
 def compute_mse(weights, values, target):
     mixed = np.dot(weights, values)
@@ -80,6 +94,7 @@ def optimize_combo(
     max_iter: int = MAX_COMBINATIONS,
     mse_threshold: float = MSE_THRESHOLD,
     progress_cb=None,
+    constraints=None,
 ):
     """Simple random search optimization.
 
@@ -95,12 +110,24 @@ def optimize_combo(
         Stop early if a combination reaches this MSE.
     progress_cb : callable
         Called as ``progress_cb(iteration, best_mse)`` after each step.
+    constraints : dict
+        Ключ: индекс на материала, стойност: (min, max) ограничения на дяловете.
     """
     n = values.shape[0]
     best_mse = float("inf")
     best_w = None
+    def _satisfies(w):
+        if not constraints:
+            return True
+        for idx, (lb, ub) in constraints.items():
+            if w[idx] < lb or w[idx] > ub:
+                return False
+        return True
+
     for i in range(1, max_iter + 1):
         w = np.random.dirichlet(np.ones(n))
+        if not _satisfies(w):
+            continue
         mse = compute_mse(w, values, target)
         if mse < best_mse:
             best_mse, best_w = mse, w

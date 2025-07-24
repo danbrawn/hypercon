@@ -32,10 +32,7 @@
     {% endfor %}
   </select>
 
-  <h3>4. Таргет профил</h3>
-  <textarea id="target-profile" rows="2" cols="40" placeholder="0.1,0.2,0.3"></textarea>
-
-  <h3>5. Параметри на оптимизацията</h3>
+  <h3>4. Параметри на оптимизацията</h3>
   <label>MAX_COMBINATIONS
     <input type="number" id="max-comb" value="{{ default_max_comb }}" min="1">
   </label>
@@ -49,29 +46,73 @@
 <div id="progress" style="display:none;">
   Прогрес: <span id="pct">0</span>%
   Най-добро MSE: <span id="best-mse">-</span>
+  <button type="button" id="stop-btn">Спри</button>
 </div>
 
 <div id="result" style="display:none;">
   <h3>Резултат</h3>
   <pre id="text-result"></pre>
-  <canvas id="chart" width="600" height="300"></canvas>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
 (() => {
   const form = document.getElementById('opt-form');
+  let pollInterval = null;
+  let currentJobId = null;
+  const constraintsDiv = document.getElementById('constraints');
+
+  function selectedMaterials() {
+    return [...form.selected].filter(ch => ch.checked);
+  }
+
+  function addConstraintRow() {
+    const row = document.createElement('div');
+    row.className = 'constraint-row mb-1';
+    const opts = selectedMaterials().map(ch =>
+      `<option value="${ch.value}">${ch.parentElement.textContent.trim()}</option>`
+    ).join('');
+    row.innerHTML = `
+      <select class="mat form-select form-select-sm d-inline w-auto">${opts}</select>
+      <select class="op form-select form-select-sm d-inline w-auto mx-1">
+        <option value="&gt;=">&ge;</option>
+        <option value="&lt;=">&le;</option>
+        <option value="=">=</option>
+      </select>
+      <input type="number" step="0.0001" class="val form-control form-control-sm d-inline w-auto" style="width:6rem;">
+      <button type="button" class="btn btn-sm btn-outline-danger ms-1 remove">&times;</button>`;
+    row.querySelector('.remove').addEventListener('click', () => row.remove());
+    constraintsDiv.appendChild(row);
+  }
+
+  document.getElementById('add-constraint').addEventListener('click', addConstraintRow);
+  document.getElementById('reset-constraints').addEventListener('click', () => {
+    constraintsDiv.innerHTML = '';
+  });
+
+  form.querySelectorAll('input[name="selected"]').forEach(ch => {
+    ch.addEventListener('change', () => {
+      constraintsDiv.querySelectorAll('.mat').forEach(sel => {
+        const val = sel.value;
+        sel.innerHTML = selectedMaterials().map(c =>
+          `<option value="${c.value}" ${c.value===val?'selected':''}>${c.parentElement.textContent.trim()}</option>`
+        ).join('');
+      });
+    });
+  });
+
   form.addEventListener('submit', e => {
     e.preventDefault();
-    const selected = [...form.selected].filter(ch=>ch.checked).map(ch=>ch.value);
-    const constraints = {}; // събирай от допълнителните полета
+    const selected = selectedMaterials().map(ch => ch.value);
+    const constraints = [...constraintsDiv.querySelectorAll('.constraint-row')].map(r => ({
+      material_id: parseInt(r.querySelector('.mat').value),
+      op: r.querySelector('.op').value,
+      value: parseFloat(r.querySelector('.val').value)
+    }));
     const params = {
       selected_ids: selected,
       constraints,
       prop_min: parseFloat(document.getElementById('prop-min').value),
       prop_max: parseFloat(document.getElementById('prop-max').value),
-      target_profile: document.getElementById('target-profile').value
-          .split(/[,\s]+/).map(parseFloat).filter(n => !isNaN(n)),
       max_combinations: parseInt(document.getElementById('max-comb').value),
       mse_threshold: parseFloat(document.getElementById('mse-threshold').value)
     };
@@ -83,24 +124,38 @@
       },
       body: JSON.stringify(params)
     })
-    .then(r=>r.json())
-    .then(data => {
-      if (data.job_id) {
-        poll(data.job_id);
-      } else if (data.result) {
-        showResult(data.result);
-      }
-    });
+    .then(r => {
+      if (!r.ok) return r.json().then(err => { throw err; });
+      return r.json();
+    })
+      .then(data => {
+        if (data.job_id) {
+          poll(data.job_id);
+        } else if (data.result) {
+          showResult(data.result);
+        }
+      })
+    .catch(err => alert(err.error || 'Грешка при стартиране'));
+  });
+
+  document.getElementById('stop-btn').addEventListener('click', () => {
+    if (currentJobId) {
+      fetch(`/optimize/cancel/${currentJobId}`, {method:'POST'}).then(() => {
+        clearInterval(pollInterval);
+        alert('Процесът е спрян');
+      });
+    }
   });
 
   function poll(job_id) {
+    currentJobId = job_id;
     document.getElementById('progress').style.display = 'block';
-    const interval = setInterval(() =>
+    pollInterval = setInterval(() =>
       fetch(`/optimize/status/${job_id}`)
         .then(r => r.json())
         .then(data => {
           if (data.status === 'SUCCESS') {
-            clearInterval(interval);
+            clearInterval(pollInterval);
             showResult(data.result);
           } else if (data.status === 'PROGRESS' && data.meta) {
             const pct = Math.round(100 * data.meta.current / data.meta.total);
@@ -128,19 +183,6 @@
     document.getElementById('text-result').textContent = text;
     document.getElementById('result').style.display = 'block';
 
-    // Графика
-    const propCols = res.prop_columns;
-    const mixed = res.weights.map((w,i)=> w * res.target_profile[i] /* грубо */);
-    new Chart(document.getElementById('chart'), {
-      type:'line',
-      data:{
-        labels: propCols,
-        datasets: [
-          { label:'Target', data: res.target_profile, borderColor:'red', fill:false },
-          { label:'Mixed',  data: mixed,          borderColor:'blue', fill:false }
-        ]
-      }
-    });
   }
 })();
 </script>
