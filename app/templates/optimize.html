@@ -4,6 +4,7 @@
 <h1>Оптимизация на рецепта</h1>
 
 <form id="opt-form">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
   <h3>1. Избери материали</h3>
   {% for m in materials %}
     <label>
@@ -63,7 +64,11 @@
       target_profile: []  // зареди от допълнителен UI
     };
     fetch('/optimize/start', {
-      method:'POST', headers:{'Content-Type':'application/json'},
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRFToken': form.csrf_token.value
+      },
       body: JSON.stringify(params)
     })
     .then(r=>r.json())
