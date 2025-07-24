@@ -120,7 +120,6 @@ def optimize_combo(
     weight vectors with granularity ``weight_step`` that sum to 1 are
     evaluated. The best combination is returned, stopping early if its
     MSE drops below ``mse_threshold``.
-
     Parameters
     ----------
     values : np.ndarray
@@ -213,6 +212,7 @@ def optimize_combo(
                     progress_cb(step, best_mse)
                 if best_mse <= mse_threshold:
                     return best_mse, best_w
+
 
     if best_w is not None:
         return best_mse, best_w
