@@ -44,8 +44,6 @@ def page_optimize():
 @login_required
 def start():
     params = request.json
-    if not params.get('target_profile'):
-        return jsonify(error='Missing target profile'), 400
     try:
         job = optimize_task.apply_async(args=[params])
     except OperationalError:
@@ -65,3 +63,10 @@ def status(job_id):
     if job.ready():
         resp['result'] = job.result
     return jsonify(resp)
+
+
+@bp.route('/cancel/<job_id>', methods=['POST'])
+@login_required
+def cancel(job_id):
+    optimize_task.app.control.revoke(job_id, terminate=True)
+    return jsonify({'status': 'CANCELLED'})

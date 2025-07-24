@@ -32,10 +32,7 @@
     {% endfor %}
   </select>
 
-  <h3>4. Таргет профил</h3>
-  <textarea id="target-profile" rows="2" cols="40" placeholder="0.1,0.2,0.3"></textarea>
-
-  <h3>5. Параметри на оптимизацията</h3>
+  <h3>4. Параметри на оптимизацията</h3>
   <label>MAX_COMBINATIONS
     <input type="number" id="max-comb" value="{{ default_max_comb }}" min="1">
   </label>
@@ -49,18 +46,20 @@
 <div id="progress" style="display:none;">
   Прогрес: <span id="pct">0</span>%
   Най-добро MSE: <span id="best-mse">-</span>
+  <button type="button" id="stop-btn">Спри</button>
 </div>
 
 <div id="result" style="display:none;">
   <h3>Резултат</h3>
   <pre id="text-result"></pre>
-  <canvas id="chart" width="600" height="300"></canvas>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
 (() => {
   const form = document.getElementById('opt-form');
+  let pollInterval = null;
+  let currentJobId = null;
+
   form.addEventListener('submit', e => {
     e.preventDefault();
     const selected = [...form.selected].filter(ch=>ch.checked).map(ch=>ch.value);
@@ -70,8 +69,6 @@
       constraints,
       prop_min: parseFloat(document.getElementById('prop-min').value),
       prop_max: parseFloat(document.getElementById('prop-max').value),
-      target_profile: document.getElementById('target-profile').value
-          .split(/[,\s]+/).map(parseFloat).filter(n => !isNaN(n)),
       max_combinations: parseInt(document.getElementById('max-comb').value),
       mse_threshold: parseFloat(document.getElementById('mse-threshold').value)
     };
@@ -87,24 +84,35 @@
       if (!r.ok) return r.json().then(err => { throw err; });
       return r.json();
     })
-    .then(data => {
-      if (data.job_id) {
-        poll(data.job_id);
-      } else if (data.result) {
-        showResult(data.result);
-      }
-    })
+      .then(data => {
+        if (data.job_id) {
+          poll(data.job_id);
+        } else if (data.result) {
+          showResult(data.result);
+        }
+      })
     .catch(err => alert(err.error || 'Грешка при стартиране'));
   });
 
+  document.getElementById('stop-btn').addEventListener('click', () => {
+    if (currentJobId) {
+      fetch(`/optimize/cancel/${currentJobId}`, {method:'POST'}).then(() => {
+        clearInterval(pollInterval);
+        alert('Процесът е спрян');
+      });
+    }
+
+  });
+
   function poll(job_id) {
+    currentJobId = job_id;
     document.getElementById('progress').style.display = 'block';
-    const interval = setInterval(() =>
+    pollInterval = setInterval(() =>
       fetch(`/optimize/status/${job_id}`)
         .then(r => r.json())
         .then(data => {
           if (data.status === 'SUCCESS') {
-            clearInterval(interval);
+            clearInterval(pollInterval);
             showResult(data.result);
           } else if (data.status === 'PROGRESS' && data.meta) {
             const pct = Math.round(100 * data.meta.current / data.meta.total);
@@ -132,19 +140,6 @@
     document.getElementById('text-result').textContent = text;
     document.getElementById('result').style.display = 'block';
 
-    // Графика
-    const propCols = res.prop_columns;
-    const mixed = res.weights.map((w,i)=> w * res.target_profile[i] /* грубо */);
-    new Chart(document.getElementById('chart'), {
-      type:'line',
-      data:{
-        labels: propCols,
-        datasets: [
-          { label:'Target', data: res.target_profile, borderColor:'red', fill:false },
-          { label:'Mixed',  data: mixed,          borderColor:'blue', fill:false }
-        ]
-      }
-    });
   }
 })();
 </script>
