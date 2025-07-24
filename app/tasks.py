@@ -7,6 +7,7 @@ from .optimize import (
 )
 from threading import Thread, Event
 import uuid
+from flask import current_app
 
 celery = Celery(
     'hypercon',
@@ -20,6 +21,9 @@ class _LocalJob:
     def __init__(self, params):
         self.id = str(uuid.uuid4())
         self.params = params
+        # Capture the current Flask app so the worker thread can push an
+        # application context when accessing the database.
+        self.app = current_app._get_current_object()
         self.status = 'PENDING'
         self.meta = {'current': 0, 'total': params.get('max_combinations', MAX_COMBINATIONS), 'best_mse': None}
         self.result = None
@@ -30,15 +34,16 @@ class _LocalJob:
         self._cancel.set()
 
     def _run(self):
-        max_comb = self.params.get('max_combinations', MAX_COMBINATIONS)
-        mse_thresh = self.params.get('mse_threshold', MSE_THRESHOLD)
-        try:
-            ids, values, target, prop_cols, constraints = load_data(self.params)
-        except ValueError as exc:
-            self.status = 'FAILURE'
-            self.result = {'error': str(exc)}
-            return
-
+        # ``load_data`` and SQLAlchemy operations require an application context
+        with self.app.app_context():
+            max_comb = self.params.get('max_combinations', MAX_COMBINATIONS)
+            mse_thresh = self.params.get('mse_threshold', MSE_THRESHOLD)
+            try:
+                ids, values, target, prop_cols, constraints = load_data(self.params)
+            except ValueError as exc:
+                self.status = 'FAILURE'
+                self.result = {'error': str(exc)}
+                return
         progress = []
 
         def cb(step, best):

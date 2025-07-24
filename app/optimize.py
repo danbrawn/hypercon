@@ -1,6 +1,6 @@
 import numpy as np
 from sqlalchemy import MetaData, Table, inspect, select
-from flask import session
+from flask import session, has_request_context
 from flask_login import current_user
 
 from . import db
@@ -32,8 +32,14 @@ def _is_number(val: str) -> bool:
     return _parse_numeric(val) is not None
 
 def _get_materials_table():
-    """Връща таблицата materials_grit за текущата схема."""
-    sch = session.get("schema") if current_user.role == "operator" else "main"
+    """Връща таблицата materials_grit за текущата схема.
+
+    If called outside of a request context, defaults to the ``main`` schema.
+    """
+    if has_request_context() and getattr(current_user, "role", None) == "operator":
+        sch = session.get("schema", "main")
+    else:
+        sch = "main"
     meta = MetaData(schema=sch)
     return Table("materials_grit", meta, autoload_with=db.engine)
 
