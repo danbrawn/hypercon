@@ -24,8 +24,11 @@ def optimize_task(self, params):
 
     progress = []
 
+    update_enabled = getattr(getattr(self, 'request', None), 'id', None) is not None
+
     def cb(step, best):
-        self.update_state(state='PROGRESS', meta={'current': step, 'total': max_comb, 'best_mse': best})
+        if update_enabled:
+            self.update_state(state='PROGRESS', meta={'current': step, 'total': max_comb, 'best_mse': best})
         progress.append({'step': step, 'best_mse': best})
 
     out = optimize_combo(values, target, max_comb, mse_thresh, progress_cb=cb)

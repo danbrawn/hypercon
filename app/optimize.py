@@ -48,7 +48,7 @@ def load_data(params):
     Връща:
       - material_ids: list
       - property_values: np.ndarray(shape=(n, m))
-      - target_profile: np.ndarray(length=m)
+      - target_profile: np.ndarray(length=m)  # средни стойности на избраните материали
       - prop_columns: list
     """
     tbl = _get_materials_table()
