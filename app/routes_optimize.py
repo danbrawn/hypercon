@@ -1,7 +1,8 @@
 from flask import Blueprint, request, jsonify
 from .tasks import optimize_task  # нашата Celery задача
 
-bp = Blueprint('optimize', __name__, url_prefix='/api/optimize')
+# API blueprint for optimization endpoints
+bp = Blueprint('optimize_api', __name__, url_prefix='/api/optimize')
 
 @bp.route('', methods=['POST'])
 def start_optimize():

@@ -14,7 +14,8 @@ from flask_bcrypt import Bcrypt
 from flask_wtf import CSRFProtect
 from sqlalchemy import text
 from .config import DB_URI
-from .routes_optimize import bp as optimize_bp
+from .routes_optimize import bp as optimize_api_bp
+from .routes_optimize_page import bp as optimize_bp
 from . import tasks
 
 # ── Extensions ────────────────────────────────────────────────────────────────
@@ -126,6 +127,8 @@ def create_app():
     app.register_blueprint(auth_bp,      url_prefix="/auth")
     app.register_blueprint(admin_bp,     url_prefix="/admin")
     app.register_blueprint(materials_bp)  # без префикс
+    app.register_blueprint(optimize_bp)   # page
+    app.register_blueprint(optimize_api_bp)  # API
 
     # ── Root redirect към login или /materials ───────────────────────────────
     @app.route("/")
@@ -140,6 +143,5 @@ def create_app():
                                    mimetype='image/vnd.microsoft.icon')
 
     # ── Обгръщаме с middleware за лог на заявките ───────────────────────────
-    app.register_blueprint(optimize_bp)
     return RequestLoggerMiddleware(app)
 
