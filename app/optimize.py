@@ -1,6 +1,6 @@
 import numpy as np
 from sqlalchemy import MetaData, Table, inspect, select
-from flask import session
+from flask import session, has_request_context
 from flask_login import current_user
 
 from . import db
@@ -32,8 +32,14 @@ def _is_number(val: str) -> bool:
     return _parse_numeric(val) is not None
 
 def _get_materials_table():
-    """Връща таблицата materials_grit за текущата схема."""
-    sch = session.get("schema") if current_user.role == "operator" else "main"
+    """Връща таблицата materials_grit за текущата схема.
+
+    If called outside of a request context, defaults to the ``main`` schema.
+    """
+    if has_request_context() and getattr(current_user, "role", None) == "operator":
+        sch = session.get("schema", "main")
+    else:
+        sch = "main"
     meta = MetaData(schema=sch)
     return Table("materials_grit", meta, autoload_with=db.engine)
 
@@ -95,6 +101,7 @@ def optimize_combo(
     mse_threshold: float = MSE_THRESHOLD,
     progress_cb=None,
     constraints=None,
+    cancel_cb=None,
 ):
     """Simple random search optimization.
 
@@ -112,6 +119,9 @@ def optimize_combo(
         Called as ``progress_cb(iteration, best_mse)`` after each step.
     constraints : dict
         Ключ: индекс на материала, стойност: (min, max) ограничения на дяловете.
+    cancel_cb : callable, optional
+        If provided, ``cancel_cb()`` is checked each iteration and stops the
+        search when it returns ``True``.
     """
     n = values.shape[0]
     best_mse = float("inf")
@@ -125,6 +135,8 @@ def optimize_combo(
         return True
 
     for i in range(1, max_iter + 1):
+        if cancel_cb and cancel_cb():
+            break
         w = np.random.dirichlet(np.ones(n))
         if not _satisfies(w):
             continue

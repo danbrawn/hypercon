@@ -33,7 +33,7 @@
   </select>
 
   <h3>4. Параметри на оптимизацията</h3>
-  <label>MAX_COMBINATIONS
+  <label>MAX_ITERATIONS
     <input type="number" id="max-comb" value="{{ default_max_comb }}" min="1">
   </label>
   <label>MSE_THRESHOLD
@@ -160,7 +160,9 @@
           } else if (data.status === 'PROGRESS' && data.meta) {
             const pct = Math.round(100 * data.meta.current / data.meta.total);
             document.getElementById('pct').textContent = pct;
-            document.getElementById('best-mse').textContent = data.meta.best_mse.toFixed(6);
+            const best = data.meta.best_mse;
+            document.getElementById('best-mse').textContent =
+              best != null ? Number(best).toFixed(6) : '-';
           } else {
             document.getElementById('pct').textContent = '...';
           }
@@ -175,7 +177,8 @@
     document.getElementById('pct').textContent = '100';
     if (res.progress && res.progress.length) {
       const last = res.progress[res.progress.length - 1];
-      document.getElementById('best-mse').textContent = last.best_mse.toFixed(6);
+      document.getElementById('best-mse').textContent =
+        last.best_mse != null ? Number(last.best_mse).toFixed(6) : '-';
     }
     const text = `\nMSE: ${res.mse.toFixed(6)}\n` + res.material_ids.map((id,i)=>
       `Material ${id}: ${(res.weights[i]*100).toFixed(2)}%`
