@@ -1,5 +1,4 @@
 import numpy as np
-from scipy.optimize import minimize
 from sqlalchemy import MetaData, Table, inspect, select
 from flask import session
 from flask_login import current_user
@@ -11,12 +10,26 @@ MAX_COMBINATIONS = 7
 MSE_THRESHOLD = 0.0004
 # ==================== #
 
+import re
+
+NUM_RE = re.compile(r'^\d+(?:\.\d+)?')
+
+
+def _parse_numeric(val: str):
+    """Return numeric prefix of the column name or None."""
+    if val is None:
+        return None
+    m = NUM_RE.match(str(val))
+    if m:
+        try:
+            return float(m.group(0))
+        except ValueError:
+            return None
+    return None
+
+
 def _is_number(val: str) -> bool:
-    try:
-        float(val)
-        return True
-    except Exception:
-        return False
+    return _parse_numeric(val) is not None
 
 def _get_materials_table():
     """Връща таблицата materials_grit за текущата схема."""
@@ -42,14 +55,17 @@ def load_data(params):
     tbl = _get_materials_table()
 
     numeric_cols = [c.key for c in tbl.columns if _is_number(c.key)]
+    numeric_cols.sort(key=lambda k: _parse_numeric(k))
     prop_cols = [c for c in numeric_cols
-                 if params['prop_min'] <= float(c) <= params['prop_max']]
+                 if params['prop_min'] <= _parse_numeric(c) <= params['prop_max']]
 
     stmt = select(tbl).where(tbl.c.id.in_(params['selected_ids']))
     rows = db.session.execute(stmt).mappings().all()
 
     values = np.array([[row[c] for c in prop_cols] for row in rows], dtype=float)
     target = np.array(params['target_profile'], dtype=float)
+    if target.size != len(prop_cols):
+        raise ValueError('target profile length mismatch')
     ids = [row['id'] for row in rows]
 
     return ids, values, target, prop_cols
@@ -58,13 +74,40 @@ def compute_mse(weights, values, target):
     mixed = np.dot(weights, values)
     return float(np.mean((mixed - target) ** 2))
 
-def optimize_combo(values, target):
+def optimize_combo(
+    values,
+    target,
+    max_iter: int = MAX_COMBINATIONS,
+    mse_threshold: float = MSE_THRESHOLD,
+    progress_cb=None,
+):
+    """Simple random search optimization.
+
+    Parameters
+    ----------
+    values : np.ndarray
+        Matrix with material properties.
+    target : np.ndarray
+        Desired property profile.
+    max_iter : int
+        How many random weight sets to try.
+    mse_threshold : float
+        Stop early if a combination reaches this MSE.
+    progress_cb : callable
+        Called as ``progress_cb(iteration, best_mse)`` after each step.
+    """
     n = values.shape[0]
-    p0 = np.full(n, 1.0 / n)
-    bounds = [(0.0, 1.0)] * n
-    cons = {'type': 'eq', 'fun': lambda w: w.sum() - 1.0}
-    res = minimize(compute_mse, p0, args=(values, target),
-                   bounds=bounds, constraints=cons)
-    if res.success:
-        return res.fun, res.x
+    best_mse = float("inf")
+    best_w = None
+    for i in range(1, max_iter + 1):
+        w = np.random.dirichlet(np.ones(n))
+        mse = compute_mse(w, values, target)
+        if mse < best_mse:
+            best_mse, best_w = mse, w
+        if progress_cb:
+            progress_cb(i, best_mse)
+        if best_mse <= mse_threshold:
+            break
+    if best_w is not None:
+        return best_mse, best_w
     return None

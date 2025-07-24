@@ -14,8 +14,6 @@ from flask_bcrypt import Bcrypt
 from flask_wtf import CSRFProtect
 from sqlalchemy import text
 from .config import DB_URI
-from .routes_optimize import bp as optimize_bp
-from . import tasks
 
 # ── Extensions ────────────────────────────────────────────────────────────────
 db            = SQLAlchemy()
@@ -122,6 +120,8 @@ def create_app():
     from .routes_auth      import bp as auth_bp
     from .routes_admin     import bp as admin_bp
     from .routes_materials import bp as materials_bp
+    from .routes_optimize  import bp as optimize_bp
+    from . import tasks  # ensure Celery tasks are registered
 
     app.register_blueprint(auth_bp,      url_prefix="/auth")
     app.register_blueprint(admin_bp,     url_prefix="/admin")
