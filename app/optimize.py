@@ -120,7 +120,7 @@ def optimize_combo(
     random search is performed over ``max_iter`` weight vectors. The
     subset/weights pair with the lowest mean squared error to the target
     profile is returned. The process stops early if a combination reaches
-    ``mse_threshold``.
+    ``mse_threshold``
 
     Parameters
     ----------
