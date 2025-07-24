@@ -7,6 +7,7 @@ from .optimize import (
     _parse_numeric,
     MAX_COMBINATIONS,
     MSE_THRESHOLD,
+)
 
 from .tasks import optimize_task
 from kombu.exceptions import OperationalError
