@@ -30,7 +30,6 @@ class _LocalJob:
         self.meta = {
             'current': 0,
             'total': 0,
-
             'best_mse': None,
         }
         self.result = None
@@ -54,8 +53,8 @@ class _LocalJob:
                 return
 
             n = len(ids)
-            total = sum(math.comb(n, r) for r in range(1, min(max_comp, n) + 1))
-            self.meta['total'] = total
+            combos = sum(math.comb(n, r) for r in range(1, min(max_comp, n) + 1))
+            self.meta['total'] = combos * max_iter
 
         progress = []
         self.status = 'PROGRESS'
@@ -149,7 +148,8 @@ def optimize_task(self, params):
         return {'error': str(exc)}
 
     n = len(ids)
-    total = sum(math.comb(n, r) for r in range(1, min(max_comp, n) + 1))
+    combos = sum(math.comb(n, r) for r in range(1, min(max_comp, n) + 1))
+    total = combos * max_iter
 
     progress = []
 
@@ -158,7 +158,6 @@ def optimize_task(self, params):
     def cb(step, best):
         if update_enabled:
             self.update_state(state='PROGRESS', meta={'current': step, 'total': total, 'best_mse': best})
-
         progress.append({'step': step, 'best_mse': best})
 
     out = optimize_combo(

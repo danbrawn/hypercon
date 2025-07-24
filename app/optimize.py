@@ -114,13 +114,13 @@ def optimize_combo(
     constraints=None,
     cancel_cb=None,
 ):
-    """Brute-force search over all material combinations.
+    """Search over all combinations of materials and optimize weights.
 
     For every subset of materials up to ``max_components`` elements,
-    the function computes the mean profile of the subset (equal shares).
-    The subset with the lowest mean squared error to the target profile
-    is returned. If a subset reaches ``mse_threshold`` the search stops
-    early.
+    random search is performed over ``max_iter`` weight vectors. The
+    subset/weights pair with the lowest mean squared error to the target
+    profile is returned. The process stops early if a combination reaches
+    ``mse_threshold``
 
     Parameters
     ----------
@@ -129,7 +129,7 @@ def optimize_combo(
     target : np.ndarray
         Desired property profile.
     max_iter : int
-        Unused. Kept for backward compatibility.
+        How many random weight samples to try for each material subset.
     mse_threshold : float
         Stop early if a combination reaches this MSE.
     max_components : int
@@ -147,7 +147,7 @@ def optimize_combo(
     best_w = None
     step = 0
 
-    def _valid_subset(sub):
+    def _subset_valid(sub):
         if not constraints:
             return True
         share = 1.0 / len(sub)
@@ -160,27 +160,45 @@ def optimize_combo(
                     return False
         return True
 
+    def _weights_valid(sub, w_sub):
+        if not constraints:
+            return True
+        pos = {idx: i for i, idx in enumerate(sub)}
+        for idx, (lb, ub) in constraints.items():
+            if idx in pos:
+                val = w_sub[pos[idx]]
+                if val < lb or val > ub:
+                    return False
+            else:
+                if lb > 0:
+                    return False
+        return True
+
     max_components = min(max_components, n)
 
     for k in range(1, max_components + 1):
         for combo in itertools.combinations(range(n), k):
-            if cancel_cb and cancel_cb():
-                return None
-            step += 1
-            if not _valid_subset(combo):
+            if not _subset_valid(combo):
+                continue
+            for i in range(1, max_iter + 1):
+                if cancel_cb and cancel_cb():
+                    return None
+                step += 1
+                w_sub = np.random.dirichlet(np.ones(k))
+                if not _weights_valid(combo, w_sub):
+                    if progress_cb:
+                        progress_cb(step, best_mse)
+                    continue
+                w = np.zeros(n)
+                for pos, idx in enumerate(combo):
+                    w[idx] = w_sub[pos]
+                mse = compute_mse(w, values, target)
+                if mse < best_mse:
+                    best_mse, best_w = mse, w
                 if progress_cb:
                     progress_cb(step, best_mse)
-                continue
-            w = np.zeros(n)
-            w[list(combo)] = 1.0 / k
-            mse = compute_mse(w, values, target)
-            if mse < best_mse:
-                best_mse, best_w = mse, w
-            if progress_cb:
-                progress_cb(step, best_mse)
-            if best_mse <= mse_threshold:
-                return best_mse, best_w
-
+                if best_mse <= mse_threshold:
+                    return best_mse, best_w
 
     if best_w is not None:
         return best_mse, best_w
