@@ -39,6 +39,7 @@ def start():
     params = request.json
     if not params.get('target_profile'):
         return jsonify(error='Missing target profile'), 400
+
     try:
         job = optimize_task.apply_async(args=[params])
     except OperationalError:
