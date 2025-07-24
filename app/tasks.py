@@ -2,7 +2,8 @@ from celery import Celery
 from .optimize import (
     load_data,
     optimize_combo,
-    MAX_COMBINATIONS,
+    MAX_ITERATIONS,
+    MAX_COMPONENTS,
     MSE_THRESHOLD,
 )
 from threading import Thread, Event
@@ -25,7 +26,11 @@ class _LocalJob:
         # application context when accessing the database.
         self.app = current_app._get_current_object()
         self.status = 'PENDING'
-        self.meta = {'current': 0, 'total': params.get('max_combinations', MAX_COMBINATIONS), 'best_mse': None}
+        self.meta = {
+            'current': 0,
+            'total': params.get('iterations', MAX_ITERATIONS),
+            'best_mse': None,
+        }
         self.result = None
         self._cancel = Event()
         Thread(target=self._run, daemon=True).start()
@@ -36,7 +41,8 @@ class _LocalJob:
     def _run(self):
         # ``load_data`` and SQLAlchemy operations require an application context
         with self.app.app_context():
-            max_comb = self.params.get('max_combinations', MAX_COMBINATIONS)
+            max_iter = self.params.get('iterations', MAX_ITERATIONS)
+            max_comp = self.params.get('max_components', MAX_COMPONENTS)
             mse_thresh = self.params.get('mse_threshold', MSE_THRESHOLD)
             try:
                 ids, values, target, prop_cols, constraints = load_data(self.params)
@@ -57,8 +63,9 @@ class _LocalJob:
             out = optimize_combo(
                 values,
                 target,
-                max_comb,
-                mse_thresh,
+                max_iter=max_iter,
+                mse_threshold=mse_thresh,
+                max_components=max_comp,
                 progress_cb=cb,
                 constraints=constraints,
                 cancel_cb=self._cancel.is_set,
@@ -126,7 +133,8 @@ def optimize_task(self, params):
     params идва от фронтенда и съдържа selected_ids, constraints,
     prop_min и prop_max.
     """
-    max_comb = params.get('max_combinations', MAX_COMBINATIONS)
+    max_iter = params.get('iterations', MAX_ITERATIONS)
+    max_comp = params.get('max_components', MAX_COMPONENTS)
     mse_thresh = params.get('mse_threshold', MSE_THRESHOLD)
 
     try:
@@ -140,10 +148,18 @@ def optimize_task(self, params):
 
     def cb(step, best):
         if update_enabled:
-            self.update_state(state='PROGRESS', meta={'current': step, 'total': max_comb, 'best_mse': best})
+            self.update_state(state='PROGRESS', meta={'current': step, 'total': max_iter, 'best_mse': best})
         progress.append({'step': step, 'best_mse': best})
 
-    out = optimize_combo(values, target, max_comb, mse_thresh, progress_cb=cb, constraints=constraints)
+    out = optimize_combo(
+        values,
+        target,
+        max_iter=max_iter,
+        mse_threshold=mse_thresh,
+        max_components=max_comp,
+        progress_cb=cb,
+        constraints=constraints,
+    )
     if not out:
         return {'error': 'Optimization failed', 'progress': progress}
     mse, weights = out
