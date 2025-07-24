@@ -72,7 +72,13 @@
       body: JSON.stringify(params)
     })
     .then(r=>r.json())
-    .then(({job_id})=> poll(job_id));
+    .then(data => {
+      if (data.job_id) {
+        poll(data.job_id);
+      } else if (data.result) {
+        showResult(data.result);
+      }
+    });
   });
 
   function poll(job_id) {

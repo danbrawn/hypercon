@@ -5,6 +5,7 @@ from sqlalchemy import MetaData, Table, select
 from .optimize import _is_number
 
 from .tasks import optimize_task
+from kombu.exceptions import OperationalError
 from . import db
 from celery.result import AsyncResult
 
@@ -20,6 +21,7 @@ def _get_materials_table():
 @bp.route('', methods=['GET'])
 @login_required
 def page_optimize():
+    """Render the optimization page with material data and numeric columns."""
     tbl = _get_materials_table()
     rows = db.session.execute(select(tbl)).mappings().all()
     numeric_cols = [c.key for c in tbl.columns if _is_number(c.key)]
@@ -35,7 +37,12 @@ def page_optimize():
 @login_required
 def start():
     params = request.json
-    job = optimize_task.apply_async(args=[params])
+    try:
+        job = optimize_task.apply_async(args=[params])
+    except OperationalError:
+        # Fallback when the Celery broker/backend is unreachable
+        result = optimize_task.run(params)
+        return jsonify(status='SUCCESS', result=result), 200
     return jsonify(job_id=job.id), 202
 
 
