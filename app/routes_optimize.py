@@ -12,10 +12,21 @@ from .optimize import (
 from .tasks import optimize_task
 from kombu.exceptions import OperationalError
 from celery.exceptions import CeleryError
+from redis import Redis
+from redis.exceptions import ConnectionError as RedisConnectionError
 from . import db
 from celery.result import AsyncResult
 
 bp = Blueprint('optimize', __name__, url_prefix='/optimize')
+
+
+def _redis_available(url: str) -> bool:
+    """Check if a Redis server is reachable."""
+    try:
+        Redis.from_url(url).ping()
+        return True
+    except RedisConnectionError:
+        return False
 
 
 def _get_materials_table():
@@ -45,9 +56,12 @@ def page_optimize():
 @login_required
 def start():
     params = request.json
+    redis_url = optimize_task.app.conf.broker_url
     try:
+        if not _redis_available(redis_url):
+            raise RedisConnectionError()
         job = optimize_task.apply_async(args=[params])
-    except (OperationalError, CeleryError, Exception):
+    except (OperationalError, CeleryError, RedisConnectionError, Exception):
         # Fallback when the Celery broker/backend is unreachable
         result = optimize_task.run(params)
         return jsonify(status='SUCCESS', result=result), 200
