@@ -1,6 +1,7 @@
 import numpy as np
 from sqlalchemy import MetaData, Table, inspect, select
 from flask import session, has_request_context
+from typing import Optional
 from flask_login import current_user
 
 from . import db
@@ -31,12 +32,14 @@ def _parse_numeric(val: str):
 def _is_number(val: str) -> bool:
     return _parse_numeric(val) is not None
 
-def _get_materials_table():
-    """Връща таблицата materials_grit за текущата схема.
+def _get_materials_table(schema: Optional[str] = None):
+    """Връща таблицата materials_grit за указаната или текущата схема.
 
-    If called outside of a request context, defaults to the ``main`` schema.
+    If ``schema`` е None и няма active request context, връща ``main``.
     """
-    if has_request_context() and getattr(current_user, "role", None) == "operator":
+    if schema:
+        sch = schema
+    elif has_request_context() and getattr(current_user, "role", None) == "operator":
         sch = session.get("schema", "main")
     else:
         sch = "main"
@@ -58,7 +61,7 @@ def load_data(params):
       - target_profile: np.ndarray(length=m)  # средни стойности на избраните материали
       - prop_columns: list
     """
-    tbl = _get_materials_table()
+    tbl = _get_materials_table(params.get('schema'))
 
     numeric_cols = [c.key for c in tbl.columns if _is_number(c.key)]
     numeric_cols.sort(key=lambda k: _parse_numeric(k))

@@ -2,6 +2,10 @@
 {% block title %}Оптимизация{% endblock %}
 {% block content %}
 <h1>Оптимизация на рецепта</h1>
+<div class="mb-3">
+  <strong>Схема:</strong> {{ schema }}<br>
+  <strong>Таблица:</strong> {{ table_name }}
+</div>
 
 <form id="opt-form">
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
