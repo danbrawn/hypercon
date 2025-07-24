@@ -1,13 +1,16 @@
 import numpy as np
 from sqlalchemy import MetaData, Table, inspect, select
 from flask import session, has_request_context
+from typing import Optional
 from flask_login import current_user
+import itertools
 
 from . import db
 
 # ==== Параметри ==== #
-MAX_COMBINATIONS = 7
-MSE_THRESHOLD = 0.0004
+MAX_ITERATIONS  = 7        # брой тегления на случайни комбинации
+MAX_COMPONENTS  = 3        # максимален брой материали в сместа
+MSE_THRESHOLD   = 0.0004
 # ==================== #
 
 import re
@@ -31,12 +34,14 @@ def _parse_numeric(val: str):
 def _is_number(val: str) -> bool:
     return _parse_numeric(val) is not None
 
-def _get_materials_table():
-    """Връща таблицата materials_grit за текущата схема.
+def _get_materials_table(schema: Optional[str] = None):
+    """Връща таблицата materials_grit за указаната или текущата схема.
 
-    If called outside of a request context, defaults to the ``main`` schema.
+    If ``schema`` е None и няма active request context, връща ``main``.
     """
-    if has_request_context() and getattr(current_user, "role", None) == "operator":
+    if schema:
+        sch = schema
+    elif has_request_context() and getattr(current_user, "role", None) == "operator":
         sch = session.get("schema", "main")
     else:
         sch = "main"
@@ -58,7 +63,7 @@ def load_data(params):
       - target_profile: np.ndarray(length=m)  # средни стойности на избраните материали
       - prop_columns: list
     """
-    tbl = _get_materials_table()
+    tbl = _get_materials_table(params.get('schema'))
 
     numeric_cols = [c.key for c in tbl.columns if _is_number(c.key)]
     numeric_cols.sort(key=lambda k: _parse_numeric(k))
@@ -67,6 +72,11 @@ def load_data(params):
 
     stmt = select(tbl).where(tbl.c.id.in_(params['selected_ids']))
     rows = db.session.execute(stmt).mappings().all()
+
+    if not rows:
+        raise ValueError("Не са намерени материали за оптимизиране")
+    if not prop_cols:
+        raise ValueError("Няма подходящи числови колони в посочения диапазон")
 
     values = np.array([[row[c] for c in prop_cols] for row in rows], dtype=float)
     target = np.mean(values, axis=0)
@@ -97,13 +107,20 @@ def compute_mse(weights, values, target):
 def optimize_combo(
     values,
     target,
-    max_iter: int = MAX_COMBINATIONS,
+    max_iter: int = MAX_ITERATIONS,
     mse_threshold: float = MSE_THRESHOLD,
+    max_components: int = MAX_COMPONENTS,
     progress_cb=None,
     constraints=None,
     cancel_cb=None,
 ):
-    """Simple random search optimization.
+    """Brute-force search over all material combinations.
+
+    For every subset of materials up to ``max_components`` elements,
+    the function computes the mean profile of the subset (equal shares).
+    The subset with the lowest mean squared error to the target profile
+    is returned. If a subset reaches ``mse_threshold`` the search stops
+    early.
 
     Parameters
     ----------
@@ -112,9 +129,11 @@ def optimize_combo(
     target : np.ndarray
         Desired property profile.
     max_iter : int
-        How many random weight sets to try.
+        Unused. Kept for backward compatibility.
     mse_threshold : float
         Stop early if a combination reaches this MSE.
+    max_components : int
+        Maximum number of materials allowed in a mixture.
     progress_cb : callable
         Called as ``progress_cb(iteration, best_mse)`` after each step.
     constraints : dict
@@ -126,28 +145,42 @@ def optimize_combo(
     n = values.shape[0]
     best_mse = float("inf")
     best_w = None
-    def _satisfies(w):
+    step = 0
+
+    def _valid_subset(sub):
         if not constraints:
             return True
+        share = 1.0 / len(sub)
         for idx, (lb, ub) in constraints.items():
-            if w[idx] < lb or w[idx] > ub:
-                return False
+            if idx in sub:
+                if share < lb or share > ub:
+                    return False
+            else:
+                if lb > 0:
+                    return False
         return True
 
-    for i in range(1, max_iter + 1):
-        if cancel_cb and cancel_cb():
-            break
-        w = np.random.dirichlet(np.ones(n))
-        if _satisfies(w):
+    max_components = min(max_components, n)
+
+    for k in range(1, max_components + 1):
+        for combo in itertools.combinations(range(n), k):
+            if cancel_cb and cancel_cb():
+                return None
+            step += 1
+            if not _valid_subset(combo):
+                if progress_cb:
+                    progress_cb(step, best_mse)
+                continue
+            w = np.zeros(n)
+            w[list(combo)] = 1.0 / k
             mse = compute_mse(w, values, target)
             if mse < best_mse:
                 best_mse, best_w = mse, w
+            if progress_cb:
+                progress_cb(step, best_mse)
             if best_mse <= mse_threshold:
-                if progress_cb:
-                    progress_cb(i, best_mse)
-                break
-        if progress_cb:
-            progress_cb(i, best_mse)
+                return best_mse, best_w
+
     if best_w is not None:
         return best_mse, best_w
     return None
