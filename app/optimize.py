@@ -44,12 +44,11 @@ def load_data(params):
       - 'selected_ids': списък от избраните ID на материали
       - 'constraints': {material_id: (min, max), ...}  # засега не се ползва
       - 'prop_min', 'prop_max': граници за включване на колони
-      - 'target_profile': желан профил за смесване
 
     Връща:
       - material_ids: list
       - property_values: np.ndarray(shape=(n, m))
-      - target_profile: np.ndarray(length=m)
+      - target_profile: np.ndarray(length=m)  # средни стойности на избраните материали
       - prop_columns: list
     """
     tbl = _get_materials_table()
@@ -63,9 +62,7 @@ def load_data(params):
     rows = db.session.execute(stmt).mappings().all()
 
     values = np.array([[row[c] for c in prop_cols] for row in rows], dtype=float)
-    target = np.array(params['target_profile'], dtype=float)
-    if target.size != len(prop_cols):
-        raise ValueError('target profile length mismatch')
+    target = np.mean(values, axis=0)
     ids = [row['id'] for row in rows]
 
     return ids, values, target, prop_cols
