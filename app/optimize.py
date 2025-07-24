@@ -95,6 +95,7 @@ def optimize_combo(
     mse_threshold: float = MSE_THRESHOLD,
     progress_cb=None,
     constraints=None,
+    cancel_cb=None,
 ):
     """Simple random search optimization.
 
@@ -112,6 +113,9 @@ def optimize_combo(
         Called as ``progress_cb(iteration, best_mse)`` after each step.
     constraints : dict
         Ключ: индекс на материала, стойност: (min, max) ограничения на дяловете.
+    cancel_cb : callable, optional
+        If provided, ``cancel_cb()`` is checked each iteration and stops the
+        search when it returns ``True``.
     """
     n = values.shape[0]
     best_mse = float("inf")
@@ -125,6 +129,8 @@ def optimize_combo(
         return True
 
     for i in range(1, max_iter + 1):
+        if cancel_cb and cancel_cb():
+            break
         w = np.random.dirichlet(np.ones(n))
         if not _satisfies(w):
             continue

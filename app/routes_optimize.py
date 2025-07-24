@@ -9,7 +9,12 @@ from .optimize import (
     MSE_THRESHOLD,
 )
 
-from .tasks import optimize_task
+from .tasks import (
+    optimize_task,
+    start_local_job,
+    local_job_status,
+    cancel_local_job,
+)
 from kombu.exceptions import OperationalError
 from celery.exceptions import CeleryError
 from redis import Redis
@@ -61,16 +66,22 @@ def start():
         if not _redis_available(redis_url):
             raise RedisConnectionError()
         job = optimize_task.apply_async(args=[params])
-    except (OperationalError, CeleryError, RedisConnectionError, Exception):
-        # Fallback when the Celery broker/backend is unreachable
+        return jsonify(job_id=job.id), 202
+    except (OperationalError, CeleryError, RedisConnectionError):
+        job_id = start_local_job(params)
+        return jsonify(job_id=job_id), 202
+    except Exception:
         result = optimize_task.run(params)
         return jsonify(status='SUCCESS', result=result), 200
-    return jsonify(job_id=job.id), 202
 
 
 @bp.route('/status/<job_id>', methods=['GET'])
 @login_required
 def status(job_id):
+    local = local_job_status(job_id)
+    if local is not None:
+        return jsonify(local)
+
     job = AsyncResult(job_id, app=optimize_task.app)
     resp = {'status': job.status}
     if job.status == 'PROGRESS':
@@ -83,5 +94,7 @@ def status(job_id):
 @bp.route('/cancel/<job_id>', methods=['POST'])
 @login_required
 def cancel(job_id):
+    if cancel_local_job(job_id):
+        return jsonify({'status': 'CANCELLED'})
     optimize_task.app.control.revoke(job_id, terminate=True)
     return jsonify({'status': 'CANCELLED'})
