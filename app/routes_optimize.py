@@ -1,19 +1,41 @@
-from flask import Blueprint, request, jsonify
-from .tasks import optimize_task  # нашата Celery задача
+from flask import Blueprint, render_template, request, jsonify, session
+from flask_login import login_required, current_user
+from sqlalchemy import MetaData, Table, select
 
-# API blueprint for optimization endpoints
-bp = Blueprint('optimize_api', __name__, url_prefix='/api/optimize')
+from .tasks import optimize_task
+from . import db
+from celery.result import AsyncResult
 
-@bp.route('', methods=['POST'])
-def start_optimize():
+bp = Blueprint('optimize', __name__, url_prefix='/optimize')
+
+
+def _get_materials_table():
+    sch = session.get("schema") if current_user.role == "operator" else "main"
+    meta = MetaData(schema=sch)
+    return Table("materials_grit", meta, autoload_with=db.engine)
+
+
+@bp.route('', methods=['GET'])
+@login_required
+def page_optimize():
+    tbl = _get_materials_table()
+    rows = db.session.execute(select(tbl)).mappings().all()
+    return render_template('optimize.html', materials=rows)
+
+
+@bp.route('/start', methods=['POST'])
+@login_required
+def start():
     params = request.json
     job = optimize_task.apply_async(args=[params])
-    return jsonify({"job_id": job.id}), 202
+    return jsonify(job_id=job.id), 202
+
 
 @bp.route('/status/<job_id>', methods=['GET'])
-def get_status(job_id):
-    job = optimize_task.AsyncResult(job_id)
-    return jsonify({
-        "status": job.status,
-        "result": job.result if job.ready() else None
-    })
+@login_required
+def status(job_id):
+    job = AsyncResult(job_id, app=optimize_task.app)
+    resp = {'status': job.status}
+    if job.ready():
+        resp['result'] = job.result
+    return jsonify(resp)

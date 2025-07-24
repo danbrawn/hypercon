@@ -1,5 +1,116 @@
-{% extends "base.html" %}
+{% extends 'base.html' %}
+{% block title %}Оптимизация{% endblock %}
 {% block content %}
-<h3>Оптимизация</h3>
-<p>Тук ще се показват резултатите от оптимизацията.</p>
+<h1>Оптимизация на рецепта</h1>
+
+<form id="opt-form">
+  <h3>1. Избери материали</h3>
+  {% for m in materials %}
+    <label>
+      <input type="checkbox" name="selected" value="{{m.id}}" checked>
+      {{ m.material_name }}
+    </label><br>
+  {% endfor %}
+
+  <h3>2. Ограничения</h3>
+  <div id="constraints"></div>
+  <button type="button" id="add-constraint">Добави ограничение</button>
+  <button type="button" id="reset-constraints">Нулирай</button>
+
+  <h3>3. Граница на свойства</h3>
+  От
+  <select id="prop-min">
+    {% for col in materials[0].__table__.columns|map(attribute='key') if col|float(default=0) %}
+      {% if col.isdigit() %}
+        <option value="{{col}}">{{col}}</option>
+      {% endif %}
+    {% endfor %}
+  </select>
+  До
+  <select id="prop-max">
+    {% for col in materials[0].__table__.columns|map(attribute='key') if col|float(default=0) %}
+      {% if col|float and (col|float >= prop_min) %}
+        <option value="{{col}}">{{col}}</option>
+      {% endif %}
+    {% endfor %}
+  </select>
+
+  <h3>4. Таргет профил</h3>
+  <!-- Можеш да зареждаш го от отделна БД таблица или поле -->
+
+  <button type="submit">Стартирай</button>
+</form>
+
+<div id="progress" style="display:none;">
+  Прогрес: <span id="pct">0</span>%
+</div>
+
+<div id="result" style="display:none;">
+  <h3>Резултат</h3>
+  <pre id="text-result"></pre>
+  <canvas id="chart" width="600" height="300"></canvas>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+(() => {
+  const form = document.getElementById('opt-form');
+  form.addEventListener('submit', e => {
+    e.preventDefault();
+    const selected = [...form.selected].filter(ch=>ch.checked).map(ch=>ch.value);
+    const constraints = {}; // събирай от допълнителните полета
+    const params = {
+      selected_ids: selected,
+      constraints,
+      prop_min: parseFloat(document.getElementById('prop-min').value),
+      prop_max: parseFloat(document.getElementById('prop-max').value),
+      target_profile: []  // зареди от допълнителен UI
+    };
+    fetch('/optimize/start', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify(params)
+    })
+    .then(r=>r.json())
+    .then(({job_id})=> poll(job_id));
+  });
+
+  function poll(job_id) {
+    document.getElementById('progress').style.display = 'block';
+    const interval = setInterval(()=>
+      fetch(`/optimize/status/${job_id}`)
+       .then(r=>r.json())
+       .then(data=>{
+         if (data.status==='SUCCESS') {
+           clearInterval(interval);
+           showResult(data.result);
+         } else {
+           // няма percent, затова просто върти леден индикатор
+         }
+       }), 1000);
+  }
+
+  function showResult(res) {
+    document.getElementById('pct').textContent='100';
+    const text = `\nMSE: ${res.mse.toFixed(6)}\n` + res.material_ids.map((id,i)=>
+      `Material ${id}: ${(res.weights[i]*100).toFixed(2)}%`
+    ).join('\n');
+    document.getElementById('text-result').textContent = text;
+    document.getElementById('result').style.display = 'block';
+
+    // Графика
+    const propCols = res.prop_columns;
+    const mixed = res.weights.map((w,i)=> w * res.target_profile[i] /* грубо */);
+    new Chart(document.getElementById('chart'), {
+      type:'line',
+      data:{
+        labels: propCols,
+        datasets: [
+          { label:'Target', data: res.target_profile, borderColor:'red', fill:false },
+          { label:'Mixed',  data: mixed,          borderColor:'blue', fill:false }
+        ]
+      }
+    });
+  }
+})();
+</script>
 {% endblock %}

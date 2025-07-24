@@ -1,39 +1,70 @@
-# app/optimize.py
-
 import numpy as np
-from scipy.optimize import curve_fit
+from scipy.optimize import minimize
+from sqlalchemy import MetaData, Table, inspect, select
+from flask import session
+from flask_login import current_user
 
-def model_func(x, a, b, c):
+from . import db
+
+# ==== Параметри ==== #
+MAX_COMBINATIONS = 7
+MSE_THRESHOLD = 0.0004
+# ==================== #
+
+def _is_number(val: str) -> bool:
+    try:
+        float(val)
+        return True
+    except Exception:
+        return False
+
+def _get_materials_table():
+    """Връща таблицата materials_grit за текущата схема."""
+    sch = session.get("schema") if current_user.role == "operator" else "main"
+    meta = MetaData(schema=sch)
+    return Table("materials_grit", meta, autoload_with=db.engine)
+
+def load_data(params):
+    """Чете данните за оптимизация от базата.
+
+    Очаква params dict с ключове:
+      - 'selected_ids': списък от избраните ID на материали
+      - 'constraints': {material_id: (min, max), ...}  # засега не се ползва
+      - 'prop_min', 'prop_max': граници за включване на колони
+      - 'target_profile': желан профил за смесване
+
+    Връща:
+      - material_ids: list
+      - property_values: np.ndarray(shape=(n, m))
+      - target_profile: np.ndarray(length=m)
+      - prop_columns: list
     """
-    Примерен нелинеен модел: a * exp(b * x) + c
-    """
-    return a * np.exp(b * x) + c
+    tbl = _get_materials_table()
 
-def run_optimization(params):
-    """
-    Прави нелинейна регресия (curve_fit) на model_func спрямо данните в params.
+    numeric_cols = [c.key for c in tbl.columns if _is_number(c.key)]
+    prop_cols = [c for c in numeric_cols
+                 if params['prop_min'] <= float(c) <= params['prop_max']]
 
-    Очаква params да е dict с ключове:fdsd
-      - 'x': списък или масив на x-стойности
-      - 'y': списък или масив на y-стойности
-      - (по избор) 'initial_guess': начално приближение [a0, b0, c0]
+    stmt = select(tbl).where(tbl.c.id.in_(params['selected_ids']))
+    rows = db.session.execute(stmt).mappings().all()
 
-    Връща dict с:
-      - 'optimal_parameters': списък [a, b, c]
-      - 'covariance': матрица на ковариации
-    """
-    # Преобразуваме входа в numpy масиви
-    x = np.array(params['x'], dtype=float)
-    y = np.array(params['y'], dtype=float)
+    values = np.array([[row[c] for c in prop_cols] for row in rows], dtype=float)
+    target = np.array(params['target_profile'], dtype=float)
+    ids = [row['id'] for row in rows]
 
-    # Начално приближение
-    p0 = params.get('initial_guess', [1.0, 0.1, 0.0])
+    return ids, values, target, prop_cols
 
-    # Извършваме нелинейната регресия
-    popt, pcov = curve_fit(model_func, x, y, p0=p0)
+def compute_mse(weights, values, target):
+    mixed = np.dot(weights, values)
+    return float(np.mean((mixed - target) ** 2))
 
-    # Връщаме резултата като Python структури
-    return {
-        'optimal_parameters': popt.tolist(),
-        'covariance': pcov.tolist()
-    }
+def optimize_combo(values, target):
+    n = values.shape[0]
+    p0 = np.full(n, 1.0 / n)
+    bounds = [(0.0, 1.0)] * n
+    cons = {'type': 'eq', 'fun': lambda w: w.sum() - 1.0}
+    res = minimize(compute_mse, p0, args=(values, target),
+                   bounds=bounds, constraints=cons)
+    if res.success:
+        return res.fun, res.x
+    return None

@@ -1,5 +1,5 @@
 from celery import Celery
-from .optimize import run_optimization  # новият модул
+from .optimize import load_data, optimize_combo
 
 celery = Celery(
     'hypercon',
@@ -9,6 +9,19 @@ celery = Celery(
 
 @celery.task(bind=True)
 def optimize_task(self, params):
-    # Можете да докладвате прогрес:)))
-    # self.update_state(state='PROGRESS', meta={'percent': 50})
-    return run_optimization(params)
+    """Celery задача за оптимизация.
+
+    params идва от фронтенда и съдържа selected_ids, constraints,
+    prop_min, prop_max и target_profile.
+    """
+    ids, values, target, prop_cols = load_data(params)
+    out = optimize_combo(values, target)
+    if not out:
+        return {'error': 'Optimization failed'}
+    mse, weights = out
+    return {
+        'material_ids': ids,
+        'weights': weights.tolist(),
+        'mse': mse,
+        'prop_columns': prop_cols
+    }
