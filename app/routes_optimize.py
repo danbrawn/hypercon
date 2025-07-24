@@ -11,6 +11,7 @@ from .optimize import (
 
 from .tasks import optimize_task
 from kombu.exceptions import OperationalError
+from celery.exceptions import CeleryError
 from . import db
 from celery.result import AsyncResult
 
@@ -46,7 +47,7 @@ def start():
     params = request.json
     try:
         job = optimize_task.apply_async(args=[params])
-    except OperationalError:
+    except (OperationalError, CeleryError, Exception):
         # Fallback when the Celery broker/backend is unreachable
         result = optimize_task.run(params)
         return jsonify(status='SUCCESS', result=result), 200
