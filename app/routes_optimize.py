@@ -2,7 +2,11 @@ from flask import Blueprint, render_template, request, jsonify, session
 from flask_login import login_required, current_user
 from sqlalchemy import MetaData, Table, select
 
-from .optimize import _is_number
+from .optimize import (
+    _is_number,
+    _parse_numeric,
+    MAX_COMBINATIONS,
+    MSE_THRESHOLD,
 
 from .tasks import optimize_task
 from kombu.exceptions import OperationalError
@@ -25,11 +29,13 @@ def page_optimize():
     tbl = _get_materials_table()
     rows = db.session.execute(select(tbl)).mappings().all()
     numeric_cols = [c.key for c in tbl.columns if _is_number(c.key)]
-    numeric_cols.sort(key=lambda x: float(x))
+    numeric_cols.sort(key=lambda x: _parse_numeric(x))
     return render_template(
         'optimize.html',
         materials=rows,
-        prop_columns=numeric_cols
+        prop_columns=numeric_cols,
+        default_max_comb=MAX_COMBINATIONS,
+        default_mse_thr=MSE_THRESHOLD,
     )
 
 
@@ -37,6 +43,8 @@ def page_optimize():
 @login_required
 def start():
     params = request.json
+    if not params.get('target_profile'):
+        return jsonify(error='Missing target profile'), 400
     try:
         job = optimize_task.apply_async(args=[params])
     except OperationalError:
@@ -51,6 +59,8 @@ def start():
 def status(job_id):
     job = AsyncResult(job_id, app=optimize_task.app)
     resp = {'status': job.status}
+    if job.status == 'PROGRESS':
+        resp['meta'] = job.info
     if job.ready():
         resp['result'] = job.result
     return jsonify(resp)

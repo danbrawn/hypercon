@@ -33,13 +33,22 @@
   </select>
 
   <h3>4. Таргет профил</h3>
-  <!-- Можеш да зареждаш го от отделна БД таблица или поле -->
+  <textarea id="target-profile" rows="2" cols="40" placeholder="0.1,0.2,0.3"></textarea>
+
+  <h3>5. Параметри на оптимизацията</h3>
+  <label>MAX_COMBINATIONS
+    <input type="number" id="max-comb" value="{{ default_max_comb }}" min="1">
+  </label>
+  <label>MSE_THRESHOLD
+    <input type="number" id="mse-threshold" step="0.0001" value="{{ default_mse_thr }}">
+  </label>
 
   <button type="submit">Стартирай</button>
 </form>
 
 <div id="progress" style="display:none;">
   Прогрес: <span id="pct">0</span>%
+  Най-добро MSE: <span id="best-mse">-</span>
 </div>
 
 <div id="result" style="display:none;">
@@ -61,7 +70,10 @@
       constraints,
       prop_min: parseFloat(document.getElementById('prop-min').value),
       prop_max: parseFloat(document.getElementById('prop-max').value),
-      target_profile: []  // зареди от допълнителен UI
+      target_profile: document.getElementById('target-profile').value
+          .split(/[,\s]+/).map(parseFloat).filter(n => !isNaN(n)),
+      max_combinations: parseInt(document.getElementById('max-comb').value),
+      mse_threshold: parseFloat(document.getElementById('mse-threshold').value)
     };
     fetch('/optimize/start', {
       method: 'POST',
@@ -83,21 +95,33 @@
 
   function poll(job_id) {
     document.getElementById('progress').style.display = 'block';
-    const interval = setInterval(()=>
+    const interval = setInterval(() =>
       fetch(`/optimize/status/${job_id}`)
-       .then(r=>r.json())
-       .then(data=>{
-         if (data.status==='SUCCESS') {
-           clearInterval(interval);
-           showResult(data.result);
-         } else {
-           // няма percent, затова просто върти леден индикатор
-         }
-       }), 1000);
+        .then(r => r.json())
+        .then(data => {
+          if (data.status === 'SUCCESS') {
+            clearInterval(interval);
+            showResult(data.result);
+          } else if (data.status === 'PROGRESS' && data.meta) {
+            const pct = Math.round(100 * data.meta.current / data.meta.total);
+            document.getElementById('pct').textContent = pct;
+            document.getElementById('best-mse').textContent = data.meta.best_mse.toFixed(6);
+          } else {
+            document.getElementById('pct').textContent = '...';
+          }
+        }), 1000);
   }
 
   function showResult(res) {
-    document.getElementById('pct').textContent='100';
+    if (res.error) {
+      alert(res.error);
+      return;
+    }
+    document.getElementById('pct').textContent = '100';
+    if (res.progress && res.progress.length) {
+      const last = res.progress[res.progress.length - 1];
+      document.getElementById('best-mse').textContent = last.best_mse.toFixed(6);
+    }
     const text = `\nMSE: ${res.mse.toFixed(6)}\n` + res.material_ids.map((id,i)=>
       `Material ${id}: ${(res.weights[i]*100).toFixed(2)}%`
     ).join('\n');
