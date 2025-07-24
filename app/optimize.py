@@ -181,6 +181,7 @@ def optimize_combo(
             if best_mse <= mse_threshold:
                 return best_mse, best_w
 
+
     if best_w is not None:
         return best_mse, best_w
     return None

@@ -30,6 +30,7 @@ class _LocalJob:
         self.meta = {
             'current': 0,
             'total': 0,
+
             'best_mse': None,
         }
         self.result = None
@@ -157,6 +158,7 @@ def optimize_task(self, params):
     def cb(step, best):
         if update_enabled:
             self.update_state(state='PROGRESS', meta={'current': step, 'total': total, 'best_mse': best})
+
         progress.append({'step': step, 'best_mse': best})
 
     out = optimize_combo(
