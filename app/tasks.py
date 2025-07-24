@@ -18,7 +18,7 @@ def optimize_task(self, params):
     mse_thresh = params.get('mse_threshold', MSE_THRESHOLD)
 
     try:
-        ids, values, target, prop_cols = load_data(params)
+        ids, values, target, prop_cols, constraints = load_data(params)
     except ValueError as exc:
         return {'error': str(exc)}
 
@@ -31,7 +31,7 @@ def optimize_task(self, params):
             self.update_state(state='PROGRESS', meta={'current': step, 'total': max_comb, 'best_mse': best})
         progress.append({'step': step, 'best_mse': best})
 
-    out = optimize_combo(values, target, max_comb, mse_thresh, progress_cb=cb)
+    out = optimize_combo(values, target, max_comb, mse_thresh, progress_cb=cb, constraints=constraints)
     if not out:
         return {'error': 'Optimization failed', 'progress': progress}
     mse, weights = out
