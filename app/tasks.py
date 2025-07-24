@@ -40,7 +40,7 @@ class _LocalJob:
             mse_thresh = self.params.get('mse_threshold', MSE_THRESHOLD)
             try:
                 ids, values, target, prop_cols, constraints = load_data(self.params)
-            except ValueError as exc:
+            except Exception as exc:
                 self.status = 'FAILURE'
                 self.result = {'error': str(exc)}
                 return
@@ -51,15 +51,20 @@ class _LocalJob:
             self.meta.update(current=step, best_mse=best)
             progress.append({'step': step, 'best_mse': best})
 
-        out = optimize_combo(
-            values,
-            target,
-            max_comb,
-            mse_thresh,
-            progress_cb=cb,
-            constraints=constraints,
-            cancel_cb=self._cancel.is_set,
-        )
+        try:
+            out = optimize_combo(
+                values,
+                target,
+                max_comb,
+                mse_thresh,
+                progress_cb=cb,
+                constraints=constraints,
+                cancel_cb=self._cancel.is_set,
+            )
+        except Exception as exc:
+            self.status = 'FAILURE'
+            self.result = {'error': str(exc), 'progress': progress}
+            return
 
         if self._cancel.is_set():
             self.status = 'REVOKED'

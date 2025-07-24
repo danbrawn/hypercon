@@ -1,5 +1,6 @@
 from flask import Blueprint, render_template, request, jsonify, session
 from flask_login import login_required, current_user
+import time
 from sqlalchemy import MetaData, Table, select
 
 from .optimize import (
@@ -66,6 +67,11 @@ def start():
         if not _redis_available(redis_url):
             raise RedisConnectionError()
         job = optimize_task.apply_async(args=[params])
+        # If no worker picks up the task, fall back to the local implementation
+        time.sleep(0.2)
+        if AsyncResult(job.id, app=optimize_task.app).status == 'PENDING':
+            optimize_task.app.control.revoke(job.id, terminate=True)
+            raise CeleryError('no workers')
         return jsonify(job_id=job.id), 202
     except (OperationalError, CeleryError, RedisConnectionError):
         job_id = start_local_job(params)
