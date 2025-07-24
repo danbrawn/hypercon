@@ -68,6 +68,11 @@ def load_data(params):
     stmt = select(tbl).where(tbl.c.id.in_(params['selected_ids']))
     rows = db.session.execute(stmt).mappings().all()
 
+    if not rows:
+        raise ValueError("Не са намерени материали за оптимизиране")
+    if not prop_cols:
+        raise ValueError("Няма подходящи числови колони в посочения диапазон")
+
     values = np.array([[row[c] for c in prop_cols] for row in rows], dtype=float)
     target = np.mean(values, axis=0)
     ids = [row['id'] for row in rows]
