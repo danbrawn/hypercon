@@ -14,7 +14,11 @@ def optimize_task(self, params):
     params идва от фронтенда и съдържа selected_ids, constraints,
     prop_min, prop_max и target_profile.
     """
-    ids, values, target, prop_cols = load_data(params)
+    try:
+        ids, values, target, prop_cols = load_data(params)
+    except ValueError as exc:
+        return {'error': str(exc)}
+
     out = optimize_combo(values, target)
     if not out:
         return {'error': 'Optimization failed'}
@@ -23,5 +27,6 @@ def optimize_task(self, params):
         'material_ids': ids,
         'weights': weights.tolist(),
         'mse': mse,
-        'prop_columns': prop_cols
+        'prop_columns': prop_cols,
+        'target_profile': target.tolist()
     }

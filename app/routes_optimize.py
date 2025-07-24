@@ -2,7 +2,10 @@ from flask import Blueprint, render_template, request, jsonify, session
 from flask_login import login_required, current_user
 from sqlalchemy import MetaData, Table, select
 
+from .optimize import _is_number, _parse_numeric
+
 from .tasks import optimize_task
+from kombu.exceptions import OperationalError
 from . import db
 from celery.result import AsyncResult
 
@@ -18,16 +21,30 @@ def _get_materials_table():
 @bp.route('', methods=['GET'])
 @login_required
 def page_optimize():
+    """Render the optimization page with material data and numeric columns."""
     tbl = _get_materials_table()
     rows = db.session.execute(select(tbl)).mappings().all()
-    return render_template('optimize.html', materials=rows)
+    numeric_cols = [c.key for c in tbl.columns if _is_number(c.key)]
+    numeric_cols.sort(key=lambda x: _parse_numeric(x))
+    return render_template(
+        'optimize.html',
+        materials=rows,
+        prop_columns=numeric_cols
+    )
 
 
 @bp.route('/start', methods=['POST'])
 @login_required
 def start():
     params = request.json
-    job = optimize_task.apply_async(args=[params])
+    if not params.get('target_profile'):
+        return jsonify(error='Missing target profile'), 400
+    try:
+        job = optimize_task.apply_async(args=[params])
+    except OperationalError:
+        # Fallback when the Celery broker/backend is unreachable
+        result = optimize_task.run(params)
+        return jsonify(status='SUCCESS', result=result), 200
     return jsonify(job_id=job.id), 202
 
 

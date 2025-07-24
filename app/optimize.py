@@ -11,12 +11,26 @@ MAX_COMBINATIONS = 7
 MSE_THRESHOLD = 0.0004
 # ==================== #
 
+import re
+
+NUM_RE = re.compile(r'^\d+(?:\.\d+)?')
+
+
+def _parse_numeric(val: str):
+    """Return numeric prefix of the column name or None."""
+    if val is None:
+        return None
+    m = NUM_RE.match(str(val))
+    if m:
+        try:
+            return float(m.group(0))
+        except ValueError:
+            return None
+    return None
+
+
 def _is_number(val: str) -> bool:
-    try:
-        float(val)
-        return True
-    except Exception:
-        return False
+    return _parse_numeric(val) is not None
 
 def _get_materials_table():
     """Връща таблицата materials_grit за текущата схема."""
@@ -42,14 +56,17 @@ def load_data(params):
     tbl = _get_materials_table()
 
     numeric_cols = [c.key for c in tbl.columns if _is_number(c.key)]
+    numeric_cols.sort(key=lambda k: _parse_numeric(k))
     prop_cols = [c for c in numeric_cols
-                 if params['prop_min'] <= float(c) <= params['prop_max']]
+                 if params['prop_min'] <= _parse_numeric(c) <= params['prop_max']]
 
     stmt = select(tbl).where(tbl.c.id.in_(params['selected_ids']))
     rows = db.session.execute(stmt).mappings().all()
 
     values = np.array([[row[c] for c in prop_cols] for row in rows], dtype=float)
     target = np.array(params['target_profile'], dtype=float)
+    if target.size != len(prop_cols):
+        raise ValueError('target profile length mismatch')
     ids = [row['id'] for row in rows]
 
     return ids, values, target, prop_cols
