@@ -44,7 +44,6 @@ class _LocalJob:
                 self.status = 'FAILURE'
                 self.result = {'error': str(exc)}
                 return
-
         progress = []
 
         def cb(step, best):
