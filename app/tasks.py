@@ -9,6 +9,7 @@ from .optimize import (
 from threading import Thread, Event
 import uuid
 from flask import current_app
+import math
 
 celery = Celery(
     'hypercon',
@@ -28,7 +29,8 @@ class _LocalJob:
         self.status = 'PENDING'
         self.meta = {
             'current': 0,
-            'total': params.get('iterations', MAX_ITERATIONS),
+            'total': 0,
+
             'best_mse': None,
         }
         self.result = None
@@ -50,6 +52,10 @@ class _LocalJob:
                 self.status = 'FAILURE'
                 self.result = {'error': str(exc)}
                 return
+
+            n = len(ids)
+            total = sum(math.comb(n, r) for r in range(1, min(max_comp, n) + 1))
+            self.meta['total'] = total
 
         progress = []
         self.status = 'PROGRESS'
@@ -142,13 +148,17 @@ def optimize_task(self, params):
     except ValueError as exc:
         return {'error': str(exc)}
 
+    n = len(ids)
+    total = sum(math.comb(n, r) for r in range(1, min(max_comp, n) + 1))
+
     progress = []
 
     update_enabled = getattr(getattr(self, 'request', None), 'id', None) is not None
 
     def cb(step, best):
         if update_enabled:
-            self.update_state(state='PROGRESS', meta={'current': step, 'total': max_iter, 'best_mse': best})
+            self.update_state(state='PROGRESS', meta={'current': step, 'total': total, 'best_mse': best})
+
         progress.append({'step': step, 'best_mse': best})
 
     out = optimize_combo(
