@@ -37,8 +37,8 @@
   </select>
 
   <h3>4. Параметри на оптимизацията</h3>
-  <label>MAX_ITERATIONS
-    <input type="number" id="max-comb" value="{{ default_max_comb }}" min="1">
+  <label>MAX_COMPONENTS
+    <input type="number" id="max-class" value="{{ default_max_class }}" min="1">
   </label>
   <label>MSE_THRESHOLD
     <input type="number" id="mse-threshold" step="0.0001" value="{{ default_mse_thr }}">
@@ -117,7 +117,7 @@
       constraints,
       prop_min: parseFloat(document.getElementById('prop-min').value),
       prop_max: parseFloat(document.getElementById('prop-max').value),
-      max_combinations: parseInt(document.getElementById('max-comb').value),
+      max_components: parseInt(document.getElementById('max-class').value),
       mse_threshold: parseFloat(document.getElementById('mse-threshold').value)
     };
     fetch('/optimize/start', {

@@ -6,7 +6,7 @@ from sqlalchemy import MetaData, Table, select
 from .optimize import (
     _is_number,
     _parse_numeric,
-    MAX_COMBINATIONS,
+    MAX_COMPONENTS,
     MSE_THRESHOLD,
 )
 
@@ -55,7 +55,7 @@ def page_optimize():
         'optimize.html',
         materials=rows,
         prop_columns=numeric_cols,
-        default_max_comb=MAX_COMBINATIONS,
+        default_max_class=MAX_COMPONENTS,
         default_mse_thr=MSE_THRESHOLD,
         schema=current_schema,
         table_name=table_name,

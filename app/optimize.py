@@ -7,8 +7,9 @@ from flask_login import current_user
 from . import db
 
 # ==== Параметри ==== #
-MAX_COMBINATIONS = 7
-MSE_THRESHOLD = 0.0004
+MAX_ITERATIONS  = 7        # брой тегления на случайни комбинации
+MAX_COMPONENTS  = 3        # максимален брой материали в сместа
+MSE_THRESHOLD   = 0.0004
 # ==================== #
 
 import re
@@ -105,8 +106,9 @@ def compute_mse(weights, values, target):
 def optimize_combo(
     values,
     target,
-    max_iter: int = MAX_COMBINATIONS,
+    max_iter: int = MAX_ITERATIONS,
     mse_threshold: float = MSE_THRESHOLD,
+    max_components: int = MAX_COMPONENTS,
     progress_cb=None,
     constraints=None,
     cancel_cb=None,
@@ -123,6 +125,8 @@ def optimize_combo(
         How many random weight sets to try.
     mse_threshold : float
         Stop early if a combination reaches this MSE.
+    max_components : int
+        Maximum number of materials allowed in a mixture.
     progress_cb : callable
         Called as ``progress_cb(iteration, best_mse)`` after each step.
     constraints : dict
@@ -142,18 +146,23 @@ def optimize_combo(
                 return False
         return True
 
+    max_components = min(max_components, n)
+
     for i in range(1, max_iter + 1):
         if cancel_cb and cancel_cb():
             break
-        w = np.random.dirichlet(np.ones(n))
+        subset_size = np.random.randint(1, max_components + 1)
+        idx = np.random.choice(n, size=subset_size, replace=False)
+        w = np.zeros(n)
+        w[idx] = np.random.dirichlet(np.ones(subset_size))
         if _satisfies(w):
             mse = compute_mse(w, values, target)
             if mse < best_mse:
                 best_mse, best_w = mse, w
-            if best_mse <= mse_threshold:
-                if progress_cb:
-                    progress_cb(i, best_mse)
-                break
+                if best_mse <= mse_threshold:
+                    if progress_cb:
+                        progress_cb(i, best_mse)
+                    break
         if progress_cb:
             progress_cb(i, best_mse)
     if best_w is not None:
