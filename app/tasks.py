@@ -12,7 +12,7 @@ def optimize_task(self, params):
     """Celery задача за оптимизация.
 
     params идва от фронтенда и съдържа selected_ids, constraints,
-    prop_min, prop_max и target_profile.
+    prop_min и prop_max.
     """
     max_comb = params.get('max_combinations', MAX_COMBINATIONS)
     mse_thresh = params.get('mse_threshold', MSE_THRESHOLD)
@@ -32,11 +32,12 @@ def optimize_task(self, params):
     if not out:
         return {'error': 'Optimization failed', 'progress': progress}
     mse, weights = out
+    mixed_profile = (weights @ values).tolist()
     return {
         'material_ids': ids,
         'weights': weights.tolist(),
         'mse': mse,
         'prop_columns': prop_cols,
-        'target_profile': target.tolist(),
+        'mixed_profile': mixed_profile,
         'progress': progress
     }
