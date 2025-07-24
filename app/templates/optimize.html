@@ -4,6 +4,7 @@
 <h1>Оптимизация на рецепта</h1>
 
 <form id="opt-form">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
   <h3>1. Избери материали</h3>
   {% for m in materials %}
     <label>
@@ -20,18 +21,14 @@
   <h3>3. Граница на свойства</h3>
   От
   <select id="prop-min">
-    {% for col in materials[0].__table__.columns|map(attribute='key') if col|float(default=0) %}
-      {% if col.isdigit() %}
-        <option value="{{col}}">{{col}}</option>
-      {% endif %}
+    {% for col in prop_columns %}
+      <option value="{{ col }}">{{ col }}</option>
     {% endfor %}
   </select>
   До
   <select id="prop-max">
-    {% for col in materials[0].__table__.columns|map(attribute='key') if col|float(default=0) %}
-      {% if col|float and (col|float >= prop_min) %}
-        <option value="{{col}}">{{col}}</option>
-      {% endif %}
+    {% for col in prop_columns %}
+      <option value="{{ col }}">{{ col }}</option>
     {% endfor %}
   </select>
 
@@ -67,11 +64,21 @@
       target_profile: []  // зареди от допълнителен UI
     };
     fetch('/optimize/start', {
-      method:'POST', headers:{'Content-Type':'application/json'},
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRFToken': form.csrf_token.value
+      },
       body: JSON.stringify(params)
     })
     .then(r=>r.json())
-    .then(({job_id})=> poll(job_id));
+    .then(data => {
+      if (data.job_id) {
+        poll(data.job_id);
+      } else if (data.result) {
+        showResult(data.result);
+      }
+    });
   });
 
   function poll(job_id) {
