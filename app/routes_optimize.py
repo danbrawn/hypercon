@@ -2,6 +2,8 @@ from flask import Blueprint, render_template, request, jsonify, session
 from flask_login import login_required, current_user
 from sqlalchemy import MetaData, Table, select
 
+from .optimize import _is_number
+
 from .tasks import optimize_task
 from . import db
 from celery.result import AsyncResult
@@ -20,7 +22,13 @@ def _get_materials_table():
 def page_optimize():
     tbl = _get_materials_table()
     rows = db.session.execute(select(tbl)).mappings().all()
-    return render_template('optimize.html', materials=rows)
+    numeric_cols = [c.key for c in tbl.columns if _is_number(c.key)]
+    numeric_cols.sort(key=lambda x: float(x))
+    return render_template(
+        'optimize.html',
+        materials=rows,
+        prop_columns=numeric_cols
+    )
 
 
 @bp.route('/start', methods=['POST'])

@@ -20,18 +20,14 @@
   <h3>3. Граница на свойства</h3>
   От
   <select id="prop-min">
-    {% for col in materials[0].__table__.columns|map(attribute='key') if col|float(default=0) %}
-      {% if col.isdigit() %}
-        <option value="{{col}}">{{col}}</option>
-      {% endif %}
+    {% for col in prop_columns %}
+      <option value="{{ col }}">{{ col }}</option>
     {% endfor %}
   </select>
   До
   <select id="prop-max">
-    {% for col in materials[0].__table__.columns|map(attribute='key') if col|float(default=0) %}
-      {% if col|float and (col|float >= prop_min) %}
-        <option value="{{col}}">{{col}}</option>
-      {% endif %}
+    {% for col in prop_columns %}
+      <option value="{{ col }}">{{ col }}</option>
     {% endfor %}
   </select>
 
