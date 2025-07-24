@@ -138,15 +138,16 @@ def optimize_combo(
         if cancel_cb and cancel_cb():
             break
         w = np.random.dirichlet(np.ones(n))
-        if not _satisfies(w):
-            continue
-        mse = compute_mse(w, values, target)
-        if mse < best_mse:
-            best_mse, best_w = mse, w
+        if _satisfies(w):
+            mse = compute_mse(w, values, target)
+            if mse < best_mse:
+                best_mse, best_w = mse, w
+            if best_mse <= mse_threshold:
+                if progress_cb:
+                    progress_cb(i, best_mse)
+                break
         if progress_cb:
             progress_cb(i, best_mse)
-        if best_mse <= mse_threshold:
-            break
     if best_w is not None:
         return best_mse, best_w
     return None

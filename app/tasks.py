@@ -44,10 +44,12 @@ class _LocalJob:
                 self.status = 'FAILURE'
                 self.result = {'error': str(exc)}
                 return
+
         progress = []
+        self.status = 'PROGRESS'
+        self.meta.update(current=0, best_mse=None)
 
         def cb(step, best):
-            self.status = 'PROGRESS'
             self.meta.update(current=step, best_mse=best)
             progress.append({'step': step, 'best_mse': best})
 

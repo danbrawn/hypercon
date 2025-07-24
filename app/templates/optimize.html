@@ -157,6 +157,12 @@
           if (data.status === 'SUCCESS') {
             clearInterval(pollInterval);
             showResult(data.result);
+          } else if (data.status === 'FAILURE' && data.result) {
+            clearInterval(pollInterval);
+            alert(data.result.error || 'Грешка');
+          } else if (data.status === 'REVOKED') {
+            clearInterval(pollInterval);
+            alert('Процесът е спрян');
           } else if (data.status === 'PROGRESS' && data.meta) {
             const pct = Math.round(100 * data.meta.current / data.meta.total);
             document.getElementById('pct').textContent = pct;
