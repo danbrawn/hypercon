@@ -83,14 +83,18 @@
       },
       body: JSON.stringify(params)
     })
-    .then(r=>r.json())
+    .then(r => {
+      if (!r.ok) return r.json().then(err => { throw err; });
+      return r.json();
+    })
     .then(data => {
       if (data.job_id) {
         poll(data.job_id);
       } else if (data.result) {
         showResult(data.result);
       }
-    });
+    })
+    .catch(err => alert(err.error || 'Грешка при стартиране'));
   });
 
   function poll(job_id) {
