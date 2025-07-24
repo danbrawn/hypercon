@@ -49,12 +49,16 @@ def page_optimize():
     rows = db.session.execute(select(tbl)).mappings().all()
     numeric_cols = [c.key for c in tbl.columns if _is_number(c.key)]
     numeric_cols.sort(key=lambda x: _parse_numeric(x))
+    current_schema = tbl.schema or "public"
+    table_name = tbl.name
     return render_template(
         'optimize.html',
         materials=rows,
         prop_columns=numeric_cols,
         default_max_comb=MAX_COMBINATIONS,
         default_mse_thr=MSE_THRESHOLD,
+        schema=current_schema,
+        table_name=table_name,
     )
 
 
@@ -62,6 +66,7 @@ def page_optimize():
 @login_required
 def start():
     params = request.json
+    params['schema'] = session.get('schema') if current_user.role == 'operator' else 'main'
     redis_url = optimize_task.app.conf.broker_url
     try:
         if not _redis_available(redis_url):
