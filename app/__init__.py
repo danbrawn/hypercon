@@ -32,11 +32,11 @@ def create_app():
         WTF_CSRF_TIME_LIMIT            = None,
         SEND_FILE_MAX_AGE_DEFAULT      = 0  # for development
     )
-    # (optional) override from file
-    try:
-        app.config.from_pyfile('../config.ini')
-    except FileNotFoundError:
-        pass
+    # Note: database credentials are loaded via ``app.config`` from
+    # ``app/config.py``. The ``config.ini`` file is INI format and cannot be
+    # executed by ``from_pyfile``; attempting to do so results in a
+    # ``NameError`` at startup. Any further Flask configuration should be
+    # performed via environment variables or ``config.py``.
 
     # ── Logging setup ──────────────────────────────────────────────────────────
     if app.debug:
