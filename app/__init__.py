@@ -1,6 +1,6 @@
 # app/__init__.py
 
-# ◉ Monkey-patch за Flask-WTF & нов Werkzeug
+# ◉ Monkey‑patch за Flask-WTF & нов Werkzeug
 import urllib.parse, werkzeug.urls
 werkzeug.urls.url_encode = lambda q, charset='utf-8', separator='&': urllib.parse.urlencode(q, doseq=True)
 
@@ -15,37 +15,38 @@ from flask_wtf import CSRFProtect
 from sqlalchemy import text
 from .config import DB_URI
 from .middleware import RequestLoggerMiddleware
-from .models import db
 
-# ── Extensions ────────────────────────────────────────────────────────────────
+# ── Extensions ───────────────────────────────────────────────────────────────
 db            = SQLAlchemy()
 login_manager = LoginManager()
 bcrypt        = Bcrypt()
 csrf          = CSRFProtect()
 
 def create_app():
-    app = Flask(__name__)
-    app.config.update(static_folder='static', static_url_path='',
+    app = Flask(__name__, static_folder='static', static_url_path='')
+    # — Load base config & override
+    app.config.update(
         SQLALCHEMY_DATABASE_URI        = DB_URI,
         SQLALCHEMY_TRACK_MODIFICATIONS = False,
         SECRET_KEY                     = os.environ.get("SECRET_KEY", "change_me_for_prod"),
         WTF_CSRF_TIME_LIMIT            = None,
-        SEND_FILE_MAX_AGE_DEFAULT = 0  # за development
+        SEND_FILE_MAX_AGE_DEFAULT      = 0  # for development
     )
+    # (optional) override from file
+    try:
+        app.config.from_pyfile('../config.ini')
+    except FileNotFoundError:
+        pass
 
-    # ── Настройка на логване ─────────────────────────────────────────────────
+    # ── Logging setup ──────────────────────────────────────────────────────────
     if app.debug:
-        # в Dev Mode логваме DEBUG и HTTP requests
         logging.basicConfig(level=logging.DEBUG)
         logging.getLogger("werkzeug").setLevel(logging.INFO)
         logging.getLogger("access").setLevel(logging.INFO)
     else:
-        # в Prod Mode записваме в ротационен файл
         os.makedirs("logs", exist_ok=True)
         handler = RotatingFileHandler(
-            "logs/hypercon.log",
-            maxBytes=10 * 1024 * 1024,
-            backupCount=5
+            "logs/hypercon.log", maxBytes=10*1024*1024, backupCount=5
         )
         handler.setLevel(logging.INFO)
         handler.setFormatter(logging.Formatter(
@@ -55,38 +56,32 @@ def create_app():
         app.logger.setLevel(logging.INFO)
         app.logger.info("Hypercon startup")
 
-    # ── Инициализиране на extensions ─────────────────────────────────────────
+    # ── Initialize extensions ──────────────────────────────────────────────────
     db.init_app(app)
     login_manager.init_app(app)
-    login_manager.login_view = "auth.login"
-    login_manager.login_message = "Моля, влезте, за да продължите."
-    login_manager.login_message_category = "warning"
+    login_manager.login_view            = "auth.login"
+    login_manager.login_message         = "Моля, влезте, за да продължите."
+    login_manager.login_message_category= "warning"
     bcrypt.init_app(app)
     csrf.init_app(app)
 
     @app.after_request
     def add_security_headers(response):
-        # Забраняваме кеширане:
         response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
-        response.headers["Pragma"] = "no-cache"
-        response.headers["Expires"] = "0"
+        response.headers["Pragma"]        = "no-cache"
+        response.headers["Expires"]       = "0"
         return response
 
-    # ── Регистрация на user_loader ──────────────────────────────────────────
     @login_manager.user_loader
     def load_user(user_id):
+        # import here to avoid top‑level circular import
         from .models import User
         return User.query.get(int(user_id))
 
-    login_manager.login_view    = "auth.login"
-    login_manager.login_message = "Моля, влезте, за да продължите."
-
-    # ── Достъп до current_user в Jinja шаблони ───────────────────────────────
     @app.context_processor
     def inject_user():
         return dict(current_user=current_user)
 
-    # ── Задаване на search_path според session['schema'] ─────────────────────
     @app.before_request
     def set_search_path():
         sch = session.get("schema")
@@ -95,52 +90,43 @@ def create_app():
         else:
             db.session.execute(text("SET search_path TO main"))
 
-    # ── Глобален error handler за логване на неконтролирани изключения ───────
     @app.errorhandler(Exception)
     def handle_exception(e):
-        """Log unexpected server errors and propagate standard HTTP errors."""
         from werkzeug.exceptions import HTTPException
-
         if isinstance(e, HTTPException) and e.code < 500:
-            # Don't log common 4xx errors as application errors
             return e
-
         app.logger.error("Unhandled Exception", exc_info=e)
         return e
 
-    # ── Създаване на таблиците при стартиране (MVP shortcut) ─────────────────
+    # ── Create tables & load metadata ─────────────────────────────────────────
     with app.app_context():
         db.create_all()
-        # ensure db metadata is loaded
-        import app.routes_optimize  # noqa
-        # register blueprints
-        from .routes_optimize import bp as optimize_bp
-        app.register_blueprint(optimize_bp)
-        # … register the rest …
-    # ── Регистрация на Blueprints ────────────────────────────────────────────
+
+    # ── Blueprint registration ────────────────────────────────────────────────
     from .routes_auth      import bp as auth_bp
     from .routes_admin     import bp as admin_bp
     from .routes_materials import bp as materials_bp
     from .routes_optimize  import bp as optimize_bp
-    from . import tasks  # ensure tasks are registered
 
     app.register_blueprint(auth_bp,      url_prefix="/auth")
     app.register_blueprint(admin_bp,     url_prefix="/admin")
-    app.register_blueprint(materials_bp)  # без префикс
-    app.register_blueprint(optimize_bp)
+    app.register_blueprint(materials_bp)             # no prefix
+    app.register_blueprint(optimize_bp,   url_prefix="/optimize")
 
-    # ── Root redirect към login или /materials ───────────────────────────────
+    # ── Root and favicon ─────────────────────────────────────────────────────
     @app.route("/")
     def index():
         if not current_user.is_authenticated:
             return redirect(url_for("auth.login"))
         return redirect(url_for("materials.page_materials"))
 
-    @app.route('/favicon.ico')
+    @app.route("/favicon.ico")
     def favicon():
-        return send_from_directory(os.path.join(app.root_path, 'static'), 'favicon.ico',
-                                   mimetype='image/vnd.microsoft.icon')
+        return send_from_directory(
+            os.path.join(app.root_path, 'static'),
+            'favicon.ico',
+            mimetype='image/vnd.microsoft.icon'
+        )
 
-    # ── Обгръщаме с middleware за лог на заявките ───────────────────────────
+    # ── Wrap in request‑logging middleware ────────────────────────────────────
     return RequestLoggerMiddleware(app)
-
