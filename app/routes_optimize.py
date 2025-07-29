@@ -2,24 +2,18 @@
 from flask import Blueprint, render_template, request, jsonify
 from flask_login import login_required, current_user
 from .optimize_jobs import start_job, jobs
-from .optimize import _is_number
+from .optimize import _is_number, _get_materials_table
+from . import db
 
 bp = Blueprint('optimize_bp', __name__, url_prefix='/optimize')
 
 @bp.route('', methods=['GET'])
 @login_required
 def optimize_page():
-    # reflect once to get all possible numeric columns
-    from .models import db
-    from sqlalchemy import MetaData, Table
-
-    engine = db.get_engine()
-    meta   = MetaData()
-    mat    = Table('materials_grit', meta, autoload_with=engine)
+    # reflect numeric columns from the current user's materials table
+    mat = _get_materials_table()
     prop_columns = [c.name for c in mat.columns if _is_number(c.name)]
 
-    # load the user’s full material set just for the form
-    from .models import db as _db  # noqa
     rows = db.session.execute(
         mat.select().where(mat.c.user_id == current_user.id)
     ).mappings().all()
