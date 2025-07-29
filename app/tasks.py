@@ -2,6 +2,7 @@ from celery import Celery
 from .optimize import (
     load_data,
     optimize_combo,
+    optimize_continuous,
     MAX_COMPONENTS,
     MSE_THRESHOLD,
     WEIGHT_STEP,
@@ -67,15 +68,27 @@ class _LocalJob:
             progress.append({'step': step, 'best_mse': best})
 
         try:
-            out = optimize_combo(
-                values,
-                target,
-                mse_threshold=mse_thresh,
-                max_components=max_comp,
-                progress_cb=cb,
-                constraints=constraints,
-                cancel_cb=self._cancel.is_set,
-            )
+            method = self.params.get('method', 'combo')
+            if method == 'continuous':
+                out = optimize_continuous(
+                    values,
+                    target,
+                    constraints=constraints,
+                )
+                # populate progress once with the final result
+                if out:
+                    progress.append({'step': total, 'best_mse': out[0]})
+                    self.meta.update(current=total, best_mse=out[0])
+            else:
+                out = optimize_combo(
+                    values,
+                    target,
+                    mse_threshold=mse_thresh,
+                    max_components=max_comp,
+                    progress_cb=cb,
+                    constraints=constraints,
+                    cancel_cb=self._cancel.is_set,
+                )
         except Exception as exc:
             self.status = 'FAILURE'
             self.result = {'error': str(exc), 'progress': progress}
@@ -162,14 +175,30 @@ def optimize_task(self, params):
             self.update_state(state='PROGRESS', meta={'current': step, 'total': total, 'best_mse': best})
         progress.append({'step': step, 'best_mse': best})
 
-    out = optimize_combo(
-        values,
-        target,
-        mse_threshold=mse_thresh,
-        max_components=max_comp,
-        progress_cb=cb,
-        constraints=constraints,
-    )
+    method = params.get('method', 'combo')
+    if method == 'continuous':
+        out = optimize_continuous(
+            values,
+            target,
+            constraints=constraints,
+        )
+        if out:
+            progress.append({'step': total, 'best_mse': out[0]})
+            if update_enabled:
+                self.update_state(state='PROGRESS', meta={
+                    'current': total,
+                    'total': total,
+                    'best_mse': out[0]
+                })
+    else:
+        out = optimize_combo(
+            values,
+            target,
+            mse_threshold=mse_thresh,
+            max_components=max_comp,
+            progress_cb=cb,
+            constraints=constraints,
+        )
     if not out:
         return {'error': 'Optimization failed', 'progress': progress}
     mse, weights = out

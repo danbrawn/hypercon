@@ -111,8 +111,15 @@ def create_app():
     # ── Глобален error handler за логване на неконтролирани изключения ───────
     @app.errorhandler(Exception)
     def handle_exception(e):
+        """Log unexpected server errors and propagate standard HTTP errors."""
+        from werkzeug.exceptions import HTTPException
+
+        if isinstance(e, HTTPException) and e.code < 500:
+            # Don't log common 4xx errors as application errors
+            return e
+
         app.logger.error("Unhandled Exception", exc_info=e)
-        raise
+        return e
 
     # ── Създаване на таблиците при стартиране (MVP shortcut) ─────────────────
     with app.app_context():
