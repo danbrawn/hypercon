@@ -43,6 +43,12 @@
   <label>MSE_THRESHOLD
     <input type="number" id="mse-threshold" step="0.0001" value="{{ default_mse_thr }}">
   </label>
+  <label>Метод
+    <select id="method">
+      <option value="combo">Комбинаторен</option>
+      <option value="continuous">Нелинеен</option>
+    </select>
+  </label>
 
   <button type="submit">Стартирай</button>
 </form>
@@ -118,7 +124,8 @@
       prop_min: parseFloat(document.getElementById('prop-min').value),
       prop_max: parseFloat(document.getElementById('prop-max').value),
       max_components: parseInt(document.getElementById('max-class').value),
-      mse_threshold: parseFloat(document.getElementById('mse-threshold').value)
+      mse_threshold: parseFloat(document.getElementById('mse-threshold').value),
+      method: document.getElementById('method').value
     };
     fetch('/optimize/start', {
       method: 'POST',

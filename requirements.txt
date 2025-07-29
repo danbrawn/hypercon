@@ -10,3 +10,4 @@ waitress==2.1.2
 numpy==1.26.4
 celery==5.3.6
 redis==4.6.0
+scipy==1.11.4
