@@ -14,6 +14,7 @@ from flask_bcrypt import Bcrypt
 from flask_wtf import CSRFProtect
 from sqlalchemy import text
 from .config import DB_URI
+from .middleware import RequestLoggerMiddleware
 # Import blueprints and task modules lazily inside ``create_app`` to avoid
 # circular import issues during initialization.
 # from . import tasks  # Imported in ``create_app`` when needed.
@@ -23,19 +24,6 @@ db            = SQLAlchemy()
 login_manager = LoginManager()
 bcrypt        = Bcrypt()
 csrf          = CSRFProtect()
-
-# ── Middleware за логване на всеки HTTP request ───────────────────────────────
-class RequestLoggerMiddleware:
-    def __init__(self, app):
-        self.app    = app
-        self.logger = logging.getLogger("access")
-
-    def __call__(self, environ, start_response):
-        method = environ.get("REQUEST_METHOD")
-        path   = environ.get("PATH_INFO")
-        self.logger.info(f"{method} {path}")
-        return self.app(environ, start_response)
-
 
 def create_app():
     app = Flask(__name__)
