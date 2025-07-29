@@ -59,6 +59,7 @@ def _run(job_id, params):
         return
 
     mse, combo, weights = result
+
     with jobs_lock:
         jobs[job_id].update({
             'status': 'SUCCESS',

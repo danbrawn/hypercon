@@ -1,3 +1,4 @@
+
 """Core optimization helpers."""
 
 import numpy as np
@@ -117,6 +118,7 @@ def compute_mse(weights, values, target):
     return float(np.mean((mixed - target) ** 2))
 
 
+
 def optimize_continuous(values, target, constraints=None):
     """Continuous optimization using scipy's SLSQP solver.
 
@@ -152,7 +154,6 @@ def optimize_continuous(values, target, constraints=None):
     if res.success:
         return res.fun, res.x
     return None
-
 
 def find_best_mix(
     values: np.ndarray,
