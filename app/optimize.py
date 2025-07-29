@@ -4,7 +4,10 @@ from flask import session, has_request_context
 from typing import Optional
 from flask_login import current_user
 import itertools
-from scipy.optimize import minimize
+try:
+    from scipy.optimize import minimize
+except Exception:  # pragma: no cover - optional dependency
+    minimize = None
 
 from . import db
 
@@ -237,6 +240,9 @@ def optimize_continuous(values, target, constraints=None):
     tuple or None
         Returns ``(mse, weights)`` if successful, otherwise ``None``.
     """
+    if minimize is None:
+        raise RuntimeError("SciPy is required for continuous optimization")
+
     n = values.shape[0]
     x0 = np.full(n, 1.0 / n)
     bnds = [(0.0, 1.0) for _ in range(n)]

@@ -75,6 +75,11 @@ class _LocalJob:
                     target,
                     constraints=constraints,
                 )
+                # populate progress once with the final result
+                if out:
+                    progress.append({'step': total, 'best_mse': out[0]})
+                    self.meta.update(current=total, best_mse=out[0])
+
             else:
                 out = optimize_combo(
                     values,
@@ -178,6 +183,14 @@ def optimize_task(self, params):
             target,
             constraints=constraints,
         )
+        if out:
+            progress.append({'step': total, 'best_mse': out[0]})
+            if update_enabled:
+                self.update_state(state='PROGRESS', meta={
+                    'current': total,
+                    'total': total,
+                    'best_mse': out[0]
+                })
     else:
         out = optimize_combo(
             values,
