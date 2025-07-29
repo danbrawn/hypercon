@@ -20,7 +20,7 @@
             <li class="nav-item"><a class="nav-link" href="{{ url_for('admin.manage_clients') }}">Управ. Клиенти</a></li>
             <li class="nav-item"><a class="nav-link" href="{{ url_for('admin.manage_users') }}">Управ. Потребители</a></li>
           {% endif %}
-          <li class="nav-item"><a class="nav-link" href="{{ url_for('optimize.page_optimize') }}">Оптимизация</a></li>
+          <li class="nav-item"><a class="nav-link" href="{{ url_for('optimize_bp.optimize_page') }}">Оптимизация</a></li>
           <li class="nav-item"><a class="nav-link" href="{{ url_for('auth.logout') }}">Изход</a></li>
         {% else %}
           <li class="nav-item"><a class="nav-link" href="{{ url_for('auth.login') }}">Вход</a></li>

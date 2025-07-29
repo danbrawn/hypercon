@@ -2,7 +2,10 @@
 import itertools, uuid
 from threading import Thread, Lock
 
-from .optimize import load_data, optimize_weights
+# ``optimize_continuous`` is the replacement for the old ``optimize_weights``
+# function that used SciPy's SLSQP solver. ``load_data`` now returns a
+# constraints mapping as well, so we adjust the job runner accordingly.
+from .optimize import load_data, optimize_continuous
 
 jobs      = {}
 jobs_lock = Lock()
@@ -20,7 +23,7 @@ def start_job(params):
     return job_id
 
 def _run(job_id, params):
-    ids, values, target, prop_cols = load_data(params)
+    ids, values, target, prop_cols, constraints = load_data(params)
     combos = [
         combo
         for r in range(1, min(params.get('max_combo', len(ids))) + 1)
@@ -32,7 +35,12 @@ def _run(job_id, params):
 
     for idx, combo in enumerate(combos, start=1):
         subvals = values[list(combo)]
-        out     = optimize_weights(subvals, target)
+        sub_constraints = {
+            pos: constraints[idx]
+            for pos, idx in enumerate(combo)
+            if idx in constraints
+        }
+        out = optimize_continuous(subvals, target, constraints=sub_constraints)
         if out:
             mse, weights = out
             if mse < best_mse:
