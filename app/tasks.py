@@ -2,10 +2,9 @@ from celery import Celery
 from .optimize import (
     load_data,
     optimize_combo,
-    optimize_continuous,
+    MAX_ITERATIONS,
     MAX_COMPONENTS,
     MSE_THRESHOLD,
-    WEIGHT_STEP,
 )
 from threading import Thread, Event
 import uuid
@@ -43,6 +42,7 @@ class _LocalJob:
     def _run(self):
         # ``load_data`` and SQLAlchemy operations require an application context
         with self.app.app_context():
+            max_iter = self.params.get('iterations', MAX_ITERATIONS)
             max_comp = self.params.get('max_components', MAX_COMPONENTS)
             mse_thresh = self.params.get('mse_threshold', MSE_THRESHOLD)
             try:
@@ -53,11 +53,8 @@ class _LocalJob:
                 return
 
             n = len(ids)
-            n_steps = int(round(1.0 / WEIGHT_STEP))
-            def weight_count(k):
-                return math.comb(n_steps + k - 1, k - 1)
-            total = sum(math.comb(n, r) * weight_count(r) for r in range(1, min(max_comp, n) + 1))
-            self.meta['total'] = total
+            combos = sum(math.comb(n, r) for r in range(1, min(max_comp, n) + 1))
+            self.meta['total'] = combos * max_iter
 
         progress = []
         self.status = 'PROGRESS'
@@ -68,28 +65,16 @@ class _LocalJob:
             progress.append({'step': step, 'best_mse': best})
 
         try:
-            method = self.params.get('method', 'combo')
-            if method == 'continuous':
-                out = optimize_continuous(
-                    values,
-                    target,
-                    constraints=constraints,
-                )
-                # populate progress once with the final result
-                if out:
-                    progress.append({'step': total, 'best_mse': out[0]})
-                    self.meta.update(current=total, best_mse=out[0])
-
-            else:
-                out = optimize_combo(
-                    values,
-                    target,
-                    mse_threshold=mse_thresh,
-                    max_components=max_comp,
-                    progress_cb=cb,
-                    constraints=constraints,
-                    cancel_cb=self._cancel.is_set,
-                )
+            out = optimize_combo(
+                values,
+                target,
+                max_iter=max_iter,
+                mse_threshold=mse_thresh,
+                max_components=max_comp,
+                progress_cb=cb,
+                constraints=constraints,
+                cancel_cb=self._cancel.is_set,
+            )
         except Exception as exc:
             self.status = 'FAILURE'
             self.result = {'error': str(exc), 'progress': progress}
@@ -153,6 +138,7 @@ def optimize_task(self, params):
     params идва от фронтенда и съдържа selected_ids, constraints,
     prop_min и prop_max.
     """
+    max_iter = params.get('iterations', MAX_ITERATIONS)
     max_comp = params.get('max_components', MAX_COMPONENTS)
     mse_thresh = params.get('mse_threshold', MSE_THRESHOLD)
 
@@ -162,10 +148,8 @@ def optimize_task(self, params):
         return {'error': str(exc)}
 
     n = len(ids)
-    n_steps = int(round(1.0 / WEIGHT_STEP))
-    def weight_count(k):
-        return math.comb(n_steps + k - 1, k - 1)
-    total = sum(math.comb(n, r) * weight_count(r) for r in range(1, min(max_comp, n) + 1))
+    combos = sum(math.comb(n, r) for r in range(1, min(max_comp, n) + 1))
+    total = combos * max_iter
 
     progress = []
 
@@ -176,30 +160,15 @@ def optimize_task(self, params):
             self.update_state(state='PROGRESS', meta={'current': step, 'total': total, 'best_mse': best})
         progress.append({'step': step, 'best_mse': best})
 
-    method = params.get('method', 'combo')
-    if method == 'continuous':
-        out = optimize_continuous(
-            values,
-            target,
-            constraints=constraints,
-        )
-        if out:
-            progress.append({'step': total, 'best_mse': out[0]})
-            if update_enabled:
-                self.update_state(state='PROGRESS', meta={
-                    'current': total,
-                    'total': total,
-                    'best_mse': out[0]
-                })
-    else:
-        out = optimize_combo(
-            values,
-            target,
-            mse_threshold=mse_thresh,
-            max_components=max_comp,
-            progress_cb=cb,
-            constraints=constraints,
-        )
+    out = optimize_combo(
+        values,
+        target,
+        max_iter=max_iter,
+        mse_threshold=mse_thresh,
+        max_components=max_comp,
+        progress_cb=cb,
+        constraints=constraints,
+    )
     if not out:
         return {'error': 'Optimization failed', 'progress': progress}
     mse, weights = out

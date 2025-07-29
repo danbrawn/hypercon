@@ -4,17 +4,13 @@ from flask import session, has_request_context
 from typing import Optional
 from flask_login import current_user
 import itertools
-try:
-    from scipy.optimize import minimize
-except Exception:  # pragma: no cover - optional dependency
-    minimize = None
 
 from . import db
 
 # ==== Параметри ==== #
+MAX_ITERATIONS  = 7        # брой тегления на случайни комбинации
 MAX_COMPONENTS  = 3        # максимален брой материали в сместа
 MSE_THRESHOLD   = 0.0004
-WEIGHT_STEP     = 0.1      # стъпка при изчерпателното претърсване на дяловете
 # ==================== #
 
 import re
@@ -111,31 +107,33 @@ def compute_mse(weights, values, target):
 def optimize_combo(
     values,
     target,
+    max_iter: int = MAX_ITERATIONS,
     mse_threshold: float = MSE_THRESHOLD,
     max_components: int = MAX_COMPONENTS,
-    weight_step: float = WEIGHT_STEP,
     progress_cb=None,
     constraints=None,
     cancel_cb=None,
 ):
-    """Exhaustively search all material subsets and weight fractions.
+    """Search over all combinations of materials and optimize weights.
 
-    For every subset of materials up to ``max_components`` elements, all
-    weight vectors with granularity ``weight_step`` that sum to 1 are
-    evaluated. The best combination is returned, stopping early if its
-    MSE drops below ``mse_threshold``.
+    For every subset of materials up to ``max_components`` elements,
+    random search is performed over ``max_iter`` weight vectors. The
+    subset/weights pair with the lowest mean squared error to the target
+    profile is returned. The process stops early if a combination reaches
+    ``mse_threshold``
+
     Parameters
     ----------
     values : np.ndarray
         Matrix with material properties.
     target : np.ndarray
         Desired property profile.
+    max_iter : int
+        How many random weight samples to try for each material subset.
     mse_threshold : float
         Stop early if a combination reaches this MSE.
     max_components : int
         Maximum number of materials allowed in a mixture.
-    weight_step : float
-        Resolution of the weight search grid.
     progress_cb : callable
         Called as ``progress_cb(iteration, best_mse)`` after each step.
     constraints : dict
@@ -149,59 +147,44 @@ def optimize_combo(
     best_w = None
     step = 0
 
-    # number of discrete steps (e.g. 0.1 -> 10)
-    n_steps = int(round(1.0 / weight_step))
-
     def _subset_valid(sub):
         if not constraints:
             return True
-        for idx, (lb, _ub) in constraints.items():
-            if idx not in sub and lb > 0:
-                return False
+        share = 1.0 / len(sub)
+        for idx, (lb, ub) in constraints.items():
+            if idx in sub:
+                if share < lb or share > ub:
+                    return False
+            else:
+                if lb > 0:
+                    return False
         return True
 
     def _weights_valid(sub, w_sub):
         if not constraints:
             return True
-        for pos, idx in enumerate(sub):
-            lb, ub = constraints.get(idx, (0.0, 1.0))
-            if w_sub[pos] < lb - 1e-9 or w_sub[pos] > ub + 1e-9:
-                return False
+        pos = {idx: i for i, idx in enumerate(sub)}
+        for idx, (lb, ub) in constraints.items():
+            if idx in pos:
+                val = w_sub[pos[idx]]
+                if val < lb or val > ub:
+                    return False
+            else:
+                if lb > 0:
+                    return False
         return True
-
-    weight_cache = {}
-
-    def _weight_vectors(k):
-        if k in weight_cache:
-            return weight_cache[k]
-        vecs = []
-
-        def rec(prefix, remaining, idx):
-            if idx == k - 1:
-                prefix.append(remaining)
-                vecs.append(np.array(prefix, dtype=float) * weight_step)
-                prefix.pop()
-                return
-            for i in range(remaining + 1):
-                prefix.append(i)
-                rec(prefix, remaining - i, idx + 1)
-                prefix.pop()
-
-        rec([], n_steps, 0)
-        weight_cache[k] = vecs
-        return vecs
 
     max_components = min(max_components, n)
 
     for k in range(1, max_components + 1):
-        vecs = _weight_vectors(k)
         for combo in itertools.combinations(range(n), k):
             if not _subset_valid(combo):
                 continue
-            for w_sub in vecs:
+            for i in range(1, max_iter + 1):
                 if cancel_cb and cancel_cb():
                     return None
                 step += 1
+                w_sub = np.random.dirichlet(np.ones(k))
                 if not _weights_valid(combo, w_sub):
                     if progress_cb:
                         progress_cb(step, best_mse)
@@ -217,44 +200,6 @@ def optimize_combo(
                 if best_mse <= mse_threshold:
                     return best_mse, best_w
 
-
     if best_w is not None:
         return best_mse, best_w
-    return None
-
-
-def optimize_continuous(values, target, constraints=None):
-    """Continuous optimization using scipy's SLSQP solver.
-
-    Parameters
-    ----------
-    values : np.ndarray
-        Matrix with material properties.
-    target : np.ndarray
-        Desired property profile.
-    constraints : dict, optional
-        Index -> (lb, ub) bounds for the weight fractions.
-
-    Returns
-    -------
-    tuple or None
-        Returns ``(mse, weights)`` if successful, otherwise ``None``.
-    """
-    if minimize is None:
-        raise RuntimeError("SciPy is required for continuous optimization")
-
-    n = values.shape[0]
-    x0 = np.full(n, 1.0 / n)
-    bnds = [(0.0, 1.0) for _ in range(n)]
-    if constraints:
-        for idx, (lb, ub) in constraints.items():
-            bnds[idx] = (lb, ub)
-
-    def obj(w):
-        return compute_mse(w, values, target)
-
-    cons = [{"type": "eq", "fun": lambda w: np.sum(w) - 1.0}]
-    res = minimize(obj, x0, bounds=bnds, constraints=cons, method="SLSQP")
-    if res.success:
-        return res.fun, res.x
     return None
