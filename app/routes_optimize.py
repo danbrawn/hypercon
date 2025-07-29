@@ -1,111 +1,50 @@
-from flask import Blueprint, render_template, request, jsonify, session
+from flask import Blueprint, render_template, request, jsonify
 from flask_login import login_required, current_user
-import time
-from sqlalchemy import MetaData, Table, select
 
-from .optimize import (
-    _is_number,
-    _parse_numeric,
-    MAX_COMPONENTS,
-    MSE_THRESHOLD,
-)
+from .models import MaterialGrit
+from .optimize_jobs import start_job, jobs
 
-from .tasks import (
-    optimize_task,
-    start_local_job,
-    local_job_status,
-    cancel_local_job,
-)
-from kombu.exceptions import OperationalError
-from celery.exceptions import CeleryError
-from redis import Redis
-from redis.exceptions import ConnectionError as RedisConnectionError
-from . import db
-from celery.result import AsyncResult
-
-bp = Blueprint('optimize', __name__, url_prefix='/optimize')
-
-
-def _redis_available(url: str) -> bool:
-    """Check if a Redis server is reachable."""
-    try:
-        Redis.from_url(url).ping()
-        return True
-    except RedisConnectionError:
-        return False
-
-
-def _get_materials_table():
-    sch = session.get("schema") if current_user.role == "operator" else "main"
-    meta = MetaData(schema=sch)
-    return Table("materials_grit", meta, autoload_with=db.engine)
-
+bp = Blueprint('optimize_bp', __name__, url_prefix='/optimize')
 
 @bp.route('', methods=['GET'])
 @login_required
-def page_optimize():
-    """Render the optimization page with material data and numeric columns."""
-    tbl = _get_materials_table()
-    rows = db.session.execute(select(tbl)).mappings().all()
-    numeric_cols = [c.key for c in tbl.columns if _is_number(c.key)]
-    numeric_cols.sort(key=lambda x: _parse_numeric(x))
-    current_schema = tbl.schema or "public"
-    table_name = tbl.name
+def optimize_page():
+    # Load all materials for this user
+    mats = MaterialGrit.query.filter_by(user_id=current_user.id).all()
+    # Get numeric property columns
+    from sqlalchemy import inspect
+    mapper = inspect(MaterialGrit)
+    prop_columns = [c.key for c in mapper.attrs if _is_number(c.key)]
     return render_template(
         'optimize.html',
-        materials=rows,
-        prop_columns=numeric_cols,
-        default_max_class=MAX_COMPONENTS,
-        default_mse_thr=MSE_THRESHOLD,
-        schema=current_schema,
-        table_name=table_name,
+        materials=mats,
+        prop_columns=prop_columns
     )
 
+def _is_number(x):
+    try: float(x); return True
+    except: return False
 
 @bp.route('/start', methods=['POST'])
 @login_required
-def start():
+def start_optimize():
     params = request.json
-    params['schema'] = session.get('schema') if current_user.role == 'operator' else 'main'
-    redis_url = optimize_task.app.conf.broker_url
-    try:
-        if not _redis_available(redis_url):
-            raise RedisConnectionError()
-        job = optimize_task.apply_async(args=[params])
-        # If no worker picks up the task, fall back to the local implementation
-        time.sleep(0.2)
-        if AsyncResult(job.id, app=optimize_task.app).status == 'PENDING':
-            optimize_task.app.control.revoke(job.id, terminate=True)
-            raise CeleryError('no workers')
-        return jsonify(job_id=job.id), 202
-    except (OperationalError, CeleryError, RedisConnectionError):
-        job_id = start_local_job(params)
-        return jsonify(job_id=job_id), 202
-    except Exception:
-        result = optimize_task.run(params)
-        return jsonify(status='SUCCESS', result=result), 200
-
+    # augment with defaults
+    params.setdefault('max_combo', 5)
+    job_id = start_job(params)
+    return jsonify({'job_id': job_id}), 202
 
 @bp.route('/status/<job_id>', methods=['GET'])
 @login_required
-def status(job_id):
-    local = local_job_status(job_id)
-    if local is not None:
-        return jsonify(local)
-
-    job = AsyncResult(job_id, app=optimize_task.app)
-    resp = {'status': job.status}
-    if job.status == 'PROGRESS':
-        resp['meta'] = job.info
-    if job.ready():
-        resp['result'] = job.result
+def check_status(job_id):
+    job = jobs.get(job_id)
+    if not job:
+        return jsonify({'error': 'Unknown job'}), 404
+    resp = {
+        'status':   job['status'],
+        'progress': job['progress'],
+        'best_mse': job['best_mse']
+    }
+    if job['status'] == 'SUCCESS':
+        resp['result'] = job['result']
     return jsonify(resp)
-
-
-@bp.route('/cancel/<job_id>', methods=['POST'])
-@login_required
-def cancel(job_id):
-    if cancel_local_job(job_id):
-        return jsonify({'status': 'CANCELLED'})
-    optimize_task.app.control.revoke(job_id, terminate=True)
-    return jsonify({'status': 'CANCELLED'})

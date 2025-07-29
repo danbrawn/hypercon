@@ -3,7 +3,7 @@ from sqlalchemy import MetaData, Table, inspect, select
 from flask import session, has_request_context
 from typing import Optional
 from flask_login import current_user
-import itertools
+from scipy.optimize import minimize
 
 from . import db
 
@@ -101,106 +101,18 @@ def load_data(params):
 
     return ids, values, target, prop_cols, constraint_map
 
-def compute_mse(weights, values, target):
-    mixed = np.dot(weights, values)
-    return float(np.mean((mixed - target) ** 2))
-
-def optimize_combo(
-    values,
-    target,
-    max_iter: int = MAX_ITERATIONS,
-    mse_threshold: float = MSE_THRESHOLD,
-    max_components: int = MAX_COMPONENTS,
-    progress_cb=None,
-    constraints=None,
-    cancel_cb=None,
-):
-    """Search over all combinations of materials and optimize weights.
-
-    For every subset of materials up to ``max_components`` elements,
-    random search is performed over ``max_iter`` weight vectors. The
-    subset/weights pair with the lowest mean squared error to the target
-    profile is returned. The process stops early if a combination reaches
-    ``mse_threshold``
-
-    Parameters
-    ----------
-    values : np.ndarray
-        Matrix with material properties.
-    target : np.ndarray
-        Desired property profile.
-    max_iter : int
-        How many random weight samples to try for each material subset.
-    mse_threshold : float
-        Stop early if a combination reaches this MSE.
-    max_components : int
-        Maximum number of materials allowed in a mixture.
-    progress_cb : callable
-        Called as ``progress_cb(iteration, best_mse)`` after each step.
-    constraints : dict
-        Ключ: индекс на материала, стойност: (min, max) ограничения на дяловете.
-    cancel_cb : callable, optional
-        If provided, ``cancel_cb()`` is checked each iteration and stops the
-        search when it returns ``True``.
+def optimize_weights(values, target):
+    """
+    Given:
+      values: np.array shape (n_materials, n_props)
+      target: np.array length n_props
+    Returns:
+      (mse, weights) or None
     """
     n = values.shape[0]
-    best_mse = float("inf")
-    best_w = None
-    step = 0
-
-    def _subset_valid(sub):
-        if not constraints:
-            return True
-        share = 1.0 / len(sub)
-        for idx, (lb, ub) in constraints.items():
-            if idx in sub:
-                if share < lb or share > ub:
-                    return False
-            else:
-                if lb > 0:
-                    return False
-        return True
-
-    def _weights_valid(sub, w_sub):
-        if not constraints:
-            return True
-        pos = {idx: i for i, idx in enumerate(sub)}
-        for idx, (lb, ub) in constraints.items():
-            if idx in pos:
-                val = w_sub[pos[idx]]
-                if val < lb or val > ub:
-                    return False
-            else:
-                if lb > 0:
-                    return False
-        return True
-
-    max_components = min(max_components, n)
-
-    for k in range(1, max_components + 1):
-        for combo in itertools.combinations(range(n), k):
-            if not _subset_valid(combo):
-                continue
-            for i in range(1, max_iter + 1):
-                if cancel_cb and cancel_cb():
-                    return None
-                step += 1
-                w_sub = np.random.dirichlet(np.ones(k))
-                if not _weights_valid(combo, w_sub):
-                    if progress_cb:
-                        progress_cb(step, best_mse)
-                    continue
-                w = np.zeros(n)
-                for pos, idx in enumerate(combo):
-                    w[idx] = w_sub[pos]
-                mse = compute_mse(w, values, target)
-                if mse < best_mse:
-                    best_mse, best_w = mse, w
-                if progress_cb:
-                    progress_cb(step, best_mse)
-                if best_mse <= mse_threshold:
-                    return best_mse, best_w
-
-    if best_w is not None:
-        return best_mse, best_w
-    return None
+    p0 = np.full(n, 1/n)
+    bounds = [(0,1)] * n
+    cons = {'type': 'eq', 'fun': lambda w: w.sum() - 1}
+    res = minimize(lambda w: np.mean((w.dot(values) - target)**2),
+                   p0, bounds=bounds, constraints=cons)
+    return (res.fun, res.x) if res.success else None
