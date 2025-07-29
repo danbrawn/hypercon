@@ -15,9 +15,7 @@ from flask_wtf import CSRFProtect
 from sqlalchemy import text
 from .config import DB_URI
 from .middleware import RequestLoggerMiddleware
-# Import blueprints and task modules lazily inside ``create_app`` to avoid
-# circular import issues during initialization.
-# from . import tasks  # Imported in ``create_app`` when needed.
+from .models import db
 
 # ── Extensions ────────────────────────────────────────────────────────────────
 db            = SQLAlchemy()
@@ -113,7 +111,12 @@ def create_app():
     # ── Създаване на таблиците при стартиране (MVP shortcut) ─────────────────
     with app.app_context():
         db.create_all()
-
+        # ensure db metadata is loaded
+        import app.routes_optimize  # noqa
+        # register blueprints
+        from .routes_optimize import bp as optimize_bp
+        app.register_blueprint(optimize_bp)
+        # … register the rest …
     # ── Регистрация на Blueprints ────────────────────────────────────────────
     from .routes_auth      import bp as auth_bp
     from .routes_admin     import bp as admin_bp
