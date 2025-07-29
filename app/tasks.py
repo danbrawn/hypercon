@@ -51,52 +51,47 @@ class _LocalJob:
                 return
 
             n = len(ids)
-            n_steps = int(round(1.0 / opt.WEIGHT_STEP))
-            def weight_count(k):
-                return math.comb(n_steps + k - 1, k - 1)
-            total = sum(math.comb(n, r) * weight_count(r) for r in range(1, min(max_comp, n) + 1))
+            total = sum(math.comb(n, r) for r in range(1, min(max_comp, n) + 1))
             self.meta['total'] = total
 
         progress = []
         self.status = 'PROGRESS'
         self.meta.update(current=0, best_mse=None)
 
-        def cb(step, best):
-            self.meta.update(current=step, best_mse=best)
+        def cb(step, total, best):
+            self.meta.update(current=int(step/total*100), best_mse=best)
             progress.append({'step': step, 'best_mse': best})
 
         try:
-            out = opt.optimize_combo(
+            result = opt.find_best_mix(
                 values,
                 target,
-                mse_threshold=mse_thresh,
                 max_components=max_comp,
-                progress_cb=cb,
+                mse_threshold=mse_thresh,
                 constraints=constraints,
-                cancel_cb=self._cancel.is_set,
+                progress_cb=lambda s,t,b: cb(s,t,b),
             )
         except Exception as exc:
             self.status = 'FAILURE'
             self.result = {'error': str(exc), 'progress': progress}
             return
 
-        if self._cancel.is_set():
-            self.status = 'REVOKED'
-            self.result = {'error': 'Cancelled', 'progress': progress}
-            return
-        if not out:
+        if result is None:
             self.status = 'FAILURE'
             self.result = {'error': 'Optimization failed', 'progress': progress}
             return
 
-        mse, weights = out
-        mixed_profile = (weights @ values).tolist()
+        mse, combo, weights = result
+        if self._cancel.is_set():
+            self.status = 'REVOKED'
+            self.result = {'error': 'Cancelled', 'progress': progress}
+            return
         self.result = {
-            'material_ids': ids,
+            'material_ids': [ids[i] for i in combo],
             'weights': weights.tolist(),
             'mse': mse,
             'prop_columns': prop_cols,
-            'mixed_profile': mixed_profile,
+            'mixed_profile': (weights @ values).tolist(),
             'progress': progress,
         }
         self.status = 'SUCCESS'
@@ -149,34 +144,31 @@ def optimize_task(self, params):
         return {'error': str(exc)}
 
     n = len(ids)
-    n_steps = int(round(1.0 / opt.WEIGHT_STEP))
-    def weight_count(k):
-        return math.comb(n_steps + k - 1, k - 1)
-    total = sum(math.comb(n, r) * weight_count(r) for r in range(1, min(max_comp, n) + 1))
+    total = sum(math.comb(n, r) for r in range(1, min(max_comp, n) + 1))
 
     progress = []
 
     update_enabled = getattr(getattr(self, 'request', None), 'id', None) is not None
 
-    def cb(step, best):
+    def cb(step, total_steps, best):
         if update_enabled:
-            self.update_state(state='PROGRESS', meta={'current': step, 'total': total, 'best_mse': best})
+            self.update_state(state='PROGRESS', meta={'current': int(step/total_steps*100), 'total': 100, 'best_mse': best})
         progress.append({'step': step, 'best_mse': best})
 
-    out = opt.optimize_combo(
+    result = opt.find_best_mix(
         values,
         target,
-        mse_threshold=mse_thresh,
         max_components=max_comp,
-        progress_cb=cb,
+        mse_threshold=mse_thresh,
         constraints=constraints,
+        progress_cb=lambda s,t,b: cb(s,t,b),
     )
-    if not out:
+    if result is None:
         return {'error': 'Optimization failed', 'progress': progress}
-    mse, weights = out
+    mse, combo, weights = result
     mixed_profile = (weights @ values).tolist()
     return {
-        'material_ids': ids,
+        'material_ids': [ids[i] for i in combo],
         'weights': weights.tolist(),
         'mse': mse,
         'prop_columns': prop_cols,
