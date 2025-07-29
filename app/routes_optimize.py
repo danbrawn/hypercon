@@ -14,7 +14,6 @@ def optimize_page():
     mat = _get_materials_table()
     prop_columns = [c.name for c in mat.columns if _is_number(c.name)]
 
-    # load the user’s full material set just for the form
     rows = db.session.execute(
         mat.select().where(mat.c.user_id == current_user.id)
     ).mappings().all()
