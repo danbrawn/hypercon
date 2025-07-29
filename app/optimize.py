@@ -1,21 +1,26 @@
+
+"""Core optimization helpers."""
+
 import numpy as np
-from sqlalchemy import MetaData, Table, inspect, select
+
+from sqlalchemy import MetaData, Table, select
 from flask import session, has_request_context
-from typing import Optional
 from flask_login import current_user
+from typing import Optional
 import itertools
-try:
+import re
+
+try:  # SciPy is optional during development
     from scipy.optimize import minimize
-except Exception:  # pragma: no cover - optional dependency
+except Exception:  # pragma: no cover
     minimize = None
 
 from . import db
 
-# ==== Параметри ==== #
-MAX_COMPONENTS  = 3        # максимален брой материали в сместа
-MSE_THRESHOLD   = 0.0004
-WEIGHT_STEP     = 0.1      # стъпка при изчерпателното претърсване на дяловете
-# ==================== #
+# ── Constants ────────────────────────────────────────────────────────────────
+MAX_COMPONENTS = 7        # максимален брой материали в сместа
+MSE_THRESHOLD  = 0.0004
+# ─────────────────────────────────────────────────────────────────────────────
 
 import re
 
@@ -85,7 +90,10 @@ def load_data(params):
     values = np.array([[row[c] for c in prop_cols] for row in rows], dtype=float)
     ids = [row['id'] for row in rows]
 
-    target = np.mean(values, axis=0)
+    if 'target_profile' in params and params['target_profile']:
+        target = np.array(params['target_profile'], dtype=float)
+    else:
+        target = np.mean(values, axis=0)
 
     constraint_map = {}
     for c in params.get('constraints', []):
@@ -109,119 +117,6 @@ def compute_mse(weights, values, target):
     mixed = np.dot(weights, values)
     return float(np.mean((mixed - target) ** 2))
 
-def optimize_combo(
-    values,
-    target,
-    mse_threshold: float = MSE_THRESHOLD,
-    max_components: int = MAX_COMPONENTS,
-    weight_step: float = WEIGHT_STEP,
-    progress_cb=None,
-    constraints=None,
-    cancel_cb=None,
-):
-    """Exhaustively search all material subsets and weight fractions.
-
-    For every subset of materials up to ``max_components`` elements, all
-    weight vectors with granularity ``weight_step`` that sum to 1 are
-    evaluated. The best combination is returned, stopping early if its
-    MSE drops below ``mse_threshold``.
-    Parameters
-    ----------
-    values : np.ndarray
-        Matrix with material properties.
-    target : np.ndarray
-        Desired property profile.
-    mse_threshold : float
-        Stop early if a combination reaches this MSE.
-    max_components : int
-        Maximum number of materials allowed in a mixture.
-    weight_step : float
-        Resolution of the weight search grid.
-    progress_cb : callable
-        Called as ``progress_cb(iteration, best_mse)`` after each step.
-    constraints : dict
-        Ключ: индекс на материала, стойност: (min, max) ограничения на дяловете.
-    cancel_cb : callable, optional
-        If provided, ``cancel_cb()`` is checked each iteration and stops the
-        search when it returns ``True``.
-    """
-    n = values.shape[0]
-    best_mse = float("inf")
-    best_w = None
-    step = 0
-
-    # number of discrete steps (e.g. 0.1 -> 10)
-    n_steps = int(round(1.0 / weight_step))
-
-    def _subset_valid(sub):
-        if not constraints:
-            return True
-        for idx, (lb, _ub) in constraints.items():
-            if idx not in sub and lb > 0:
-                return False
-        return True
-
-    def _weights_valid(sub, w_sub):
-        if not constraints:
-            return True
-        for pos, idx in enumerate(sub):
-            lb, ub = constraints.get(idx, (0.0, 1.0))
-            if w_sub[pos] < lb - 1e-9 or w_sub[pos] > ub + 1e-9:
-                return False
-        return True
-
-    weight_cache = {}
-
-    def _weight_vectors(k):
-        if k in weight_cache:
-            return weight_cache[k]
-        vecs = []
-
-        def rec(prefix, remaining, idx):
-            if idx == k - 1:
-                prefix.append(remaining)
-                vecs.append(np.array(prefix, dtype=float) * weight_step)
-                prefix.pop()
-                return
-            for i in range(remaining + 1):
-                prefix.append(i)
-                rec(prefix, remaining - i, idx + 1)
-                prefix.pop()
-
-        rec([], n_steps, 0)
-        weight_cache[k] = vecs
-        return vecs
-
-    max_components = min(max_components, n)
-
-    for k in range(1, max_components + 1):
-        vecs = _weight_vectors(k)
-        for combo in itertools.combinations(range(n), k):
-            if not _subset_valid(combo):
-                continue
-            for w_sub in vecs:
-                if cancel_cb and cancel_cb():
-                    return None
-                step += 1
-                if not _weights_valid(combo, w_sub):
-                    if progress_cb:
-                        progress_cb(step, best_mse)
-                    continue
-                w = np.zeros(n)
-                for pos, idx in enumerate(combo):
-                    w[idx] = w_sub[pos]
-                mse = compute_mse(w, values, target)
-                if mse < best_mse:
-                    best_mse, best_w = mse, w
-                if progress_cb:
-                    progress_cb(step, best_mse)
-                if best_mse <= mse_threshold:
-                    return best_mse, best_w
-
-
-    if best_w is not None:
-        return best_mse, best_w
-    return None
 
 
 def optimize_continuous(values, target, constraints=None):
@@ -259,3 +154,44 @@ def optimize_continuous(values, target, constraints=None):
     if res.success:
         return res.fun, res.x
     return None
+
+def find_best_mix(
+    values: np.ndarray,
+    target: np.ndarray,
+    max_components: int = MAX_COMPONENTS,
+    mse_threshold: float | None = MSE_THRESHOLD,
+    constraints: dict | None = None,
+    progress_cb=None,
+):
+    """Enumerate material subsets and optimize each via SLSQP."""
+
+    n = values.shape[0]
+    combos = [
+        combo
+        for r in range(1, min(max_components, n) + 1)
+        for combo in itertools.combinations(range(n), r)
+    ]
+    total = len(combos)
+    best = None
+
+    for idx, combo in enumerate(combos, 1):
+        subvals = values[list(combo)]
+        sub_constr = None
+        if constraints:
+            sub_constr = {
+                pos: constraints[i]
+                for pos, i in enumerate(combo)
+                if i in constraints
+            }
+        out = optimize_continuous(subvals, target, sub_constr)
+        if out:
+            mse, weights = out
+            if best is None or mse < best[0]:
+                best = (mse, combo, weights)
+        if progress_cb:
+            best_mse = best[0] if best else None
+            progress_cb(idx, total, best_mse)
+        if best and mse_threshold is not None and best[0] <= mse_threshold:
+            break
+
+    return best
