@@ -64,7 +64,7 @@ def load_data(params):
     Връща:
       - material_ids: list
       - property_values: np.ndarray(shape=(n, m))
-      - target_profile: np.ndarray(length=m)  # средни стойности на избраните материали
+      - target_profile: np.ndarray(length=m)
       - prop_columns: list
     """
     tbl = _get_materials_table(params.get('schema'))
@@ -83,8 +83,9 @@ def load_data(params):
         raise ValueError("Няма подходящи числови колони в посочения диапазон")
 
     values = np.array([[row[c] for c in prop_cols] for row in rows], dtype=float)
-    target = np.mean(values, axis=0)
     ids = [row['id'] for row in rows]
+
+    target = np.mean(values, axis=0)
 
     constraint_map = {}
     for c in params.get('constraints', []):

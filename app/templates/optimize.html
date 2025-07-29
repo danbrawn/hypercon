@@ -43,14 +43,9 @@
   <label>MSE_THRESHOLD
     <input type="number" id="mse-threshold" step="0.0001" value="{{ default_mse_thr }}">
   </label>
-  <label>Метод
-    <select id="method">
-      <option value="combo">Комбинаторен</option>
-      <option value="continuous">Нелинеен</option>
-    </select>
-  </label>
 
-  <button type="submit">Стартирай</button>
+
+  <button type="button" id="start-btn">Стартирай</button>
 </form>
 
 <div id="progress" style="display:none;">
@@ -72,7 +67,8 @@
   const constraintsDiv = document.getElementById('constraints');
 
   function selectedMaterials() {
-    return [...form.selected].filter(ch => ch.checked);
+    return [...form.querySelectorAll('input[name="selected"]')]
+      .filter(ch => ch.checked);
   }
 
   function addConstraintRow() {
@@ -123,8 +119,7 @@
       prop_min: parseFloat(document.getElementById('prop-min').value),
       prop_max: parseFloat(document.getElementById('prop-max').value),
       max_components: parseInt(document.getElementById('max-class').value),
-      mse_threshold: parseFloat(document.getElementById('mse-threshold').value),
-      method: document.getElementById('method').value
+      mse_threshold: parseFloat(document.getElementById('mse-threshold').value)
     };
   }
 
@@ -151,8 +146,7 @@
     .catch(err => alert(err.error || 'Грешка при стартиране'));
   }
 
-  form.addEventListener('submit', e => {
-    e.preventDefault();
+  document.getElementById('start-btn').addEventListener('click', () => {
     startOptimization(gatherParams());
   });
 
@@ -227,8 +221,6 @@
       document.getElementById('max-class').value = urlParams.get('max_components');
     if (urlParams.get('mse_threshold'))
       document.getElementById('mse-threshold').value = urlParams.get('mse_threshold');
-    if (urlParams.get('method'))
-      document.getElementById('method').value = urlParams.get('method');
 
     startOptimization(gatherParams());
   }
