@@ -2,7 +2,17 @@
 import itertools, uuid
 from threading import Thread, Lock
 
-from .optimize import load_data, optimize_weights
+# ``optimize_continuous`` is the replacement for the old ``optimize_weights``
+# function that used SciPy's SLSQP solver. ``load_data`` now returns a
+# constraints mapping as well, so we adjust the job runner accordingly.
+from .optimize import (
+    load_data,
+    optimize_continuous,
+    optimize_combo,
+    WEIGHT_STEP,
+    MSE_THRESHOLD,
+    MAX_COMPONENTS,
+)
 
 jobs      = {}
 jobs_lock = Lock()
@@ -20,10 +30,20 @@ def start_job(params):
     return job_id
 
 def _run(job_id, params):
-    ids, values, target, prop_cols = load_data(params)
+    try:
+        ids, values, target, prop_cols, constraints = load_data(params)
+    except Exception as exc:
+        with jobs_lock:
+            jobs[job_id].update({'status': 'FAILURE', 'result': {'error': str(exc)}})
+        return
+
+    max_combo     = params.get('max_combo', MAX_COMPONENTS)
+    mse_threshold = params.get('mse_threshold', MSE_THRESHOLD)
+    weight_step   = params.get('weight_step', WEIGHT_STEP)
+
     combos = [
         combo
-        for r in range(1, min(params.get('max_combo', len(ids))) + 1)
+        for r in range(1, min(max_combo, len(ids)) + 1)
         for combo in itertools.combinations(range(len(ids)), r)
     ]
     total     = len(combos)
@@ -32,7 +52,22 @@ def _run(job_id, params):
 
     for idx, combo in enumerate(combos, start=1):
         subvals = values[list(combo)]
-        out     = optimize_weights(subvals, target)
+        sub_constraints = {
+            pos: constraints[idx]
+            for pos, idx in enumerate(combo)
+            if idx in constraints
+        }
+        try:
+            out = optimize_continuous(subvals, target, constraints=sub_constraints)
+        except Exception:
+            out = optimize_combo(
+                subvals,
+                target,
+                mse_threshold=mse_threshold,
+                max_components=len(combo),
+                weight_step=weight_step,
+                constraints=sub_constraints,
+            )
         if out:
             mse, weights = out
             if mse < best_mse:
@@ -45,8 +80,16 @@ def _run(job_id, params):
                 'best_mse': best_mse
             })
 
-        if params.get('mse_threshold') is not None and best_mse <= params['mse_threshold']:
+        if mse_threshold is not None and best_mse <= mse_threshold:
             break
+
+    if best_combo is None:
+        with jobs_lock:
+            jobs[job_id].update({
+                'status': 'FAILURE',
+                'result': {'error': 'Optimization failed'}
+            })
+        return
 
     with jobs_lock:
         jobs[job_id].update({
