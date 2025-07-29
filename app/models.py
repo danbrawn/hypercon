@@ -28,3 +28,7 @@ class User(db.Model, UserMixin):
     def check_password(self, pw):
         from flask_bcrypt import check_password_hash
         return check_password_hash(self.password_hash, pw)
+
+class MaterialsGrit(db.Model):
+    __tablename__ = 'materials_grit'
+    id = db.Column(db.Integer, primary_key=True)
