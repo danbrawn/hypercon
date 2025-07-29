@@ -79,6 +79,7 @@ class _LocalJob:
                 if out:
                     progress.append({'step': total, 'best_mse': out[0]})
                     self.meta.update(current=total, best_mse=out[0])
+=======
             else:
                 out = optimize_combo(
                     values,
