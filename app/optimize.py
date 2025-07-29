@@ -4,6 +4,7 @@ from flask import session, has_request_context
 from typing import Optional
 from flask_login import current_user
 import itertools
+from scipy.optimize import minimize
 
 from . import db
 
@@ -216,4 +217,38 @@ def optimize_combo(
 
     if best_w is not None:
         return best_mse, best_w
+    return None
+
+
+def optimize_continuous(values, target, constraints=None):
+    """Continuous optimization using scipy's SLSQP solver.
+
+    Parameters
+    ----------
+    values : np.ndarray
+        Matrix with material properties.
+    target : np.ndarray
+        Desired property profile.
+    constraints : dict, optional
+        Index -> (lb, ub) bounds for the weight fractions.
+
+    Returns
+    -------
+    tuple or None
+        Returns ``(mse, weights)`` if successful, otherwise ``None``.
+    """
+    n = values.shape[0]
+    x0 = np.full(n, 1.0 / n)
+    bnds = [(0.0, 1.0) for _ in range(n)]
+    if constraints:
+        for idx, (lb, ub) in constraints.items():
+            bnds[idx] = (lb, ub)
+
+    def obj(w):
+        return compute_mse(w, values, target)
+
+    cons = [{"type": "eq", "fun": lambda w: np.sum(w) - 1.0}]
+    res = minimize(obj, x0, bounds=bnds, constraints=cons, method="SLSQP")
+    if res.success:
+        return res.fun, res.x
     return None
