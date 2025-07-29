@@ -14,13 +14,15 @@ def optimize_page():
     from sqlalchemy import MetaData, Table
 
     engine = db.get_engine()
-    meta   = MetaData(bind=engine)
+    meta   = MetaData()
     mat    = Table('materials_grit', meta, autoload_with=engine)
     prop_columns = [c.name for c in mat.columns if _is_number(c.name)]
 
     # load the user’s full material set just for the form
     from .models import db as _db  # noqa
-    rows = engine.execute(mat.select().where(mat.c.user_id == current_user.id)).fetchall()
+    rows = db.session.execute(
+        mat.select().where(mat.c.user_id == current_user.id)
+    ).mappings().all()
     return render_template('optimize.html',
                            materials=rows,
                            prop_columns=prop_columns)
