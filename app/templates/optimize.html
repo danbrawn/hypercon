@@ -43,6 +43,12 @@
   <label>MSE_THRESHOLD
     <input type="number" id="mse-threshold" step="0.0001" value="{{ default_mse_thr }}">
   </label>
+  <label>Метод
+    <select id="method">
+      <option value="combo">Комбинаторен</option>
+      <option value="continuous">Нелинеен</option>
+    </select>
+  </label>
 
   <button type="submit">Стартирай</button>
 </form>
@@ -104,22 +110,25 @@
     });
   });
 
-  form.addEventListener('submit', e => {
-    e.preventDefault();
+  function gatherParams() {
     const selected = selectedMaterials().map(ch => ch.value);
     const constraints = [...constraintsDiv.querySelectorAll('.constraint-row')].map(r => ({
       material_id: parseInt(r.querySelector('.mat').value),
       op: r.querySelector('.op').value,
       value: parseFloat(r.querySelector('.val').value)
     }));
-    const params = {
+    return {
       selected_ids: selected,
       constraints,
       prop_min: parseFloat(document.getElementById('prop-min').value),
       prop_max: parseFloat(document.getElementById('prop-max').value),
       max_components: parseInt(document.getElementById('max-class').value),
-      mse_threshold: parseFloat(document.getElementById('mse-threshold').value)
+      mse_threshold: parseFloat(document.getElementById('mse-threshold').value),
+      method: document.getElementById('method').value
     };
+  }
+
+  function startOptimization(params) {
     fetch('/optimize/start', {
       method: 'POST',
       headers: {
@@ -140,6 +149,11 @@
         }
       })
     .catch(err => alert(err.error || 'Грешка при стартиране'));
+  }
+
+  form.addEventListener('submit', e => {
+    e.preventDefault();
+    startOptimization(gatherParams());
   });
 
   document.getElementById('stop-btn').addEventListener('click', () => {
@@ -196,6 +210,27 @@
     document.getElementById('text-result').textContent = text;
     document.getElementById('result').style.display = 'block';
 
+  }
+
+  // --- auto start if parameters are present in the URL ---
+  const urlParams = new URLSearchParams(window.location.search);
+  const autoSelected = urlParams.getAll('selected');
+  if (autoSelected.length) {
+    form.querySelectorAll('input[name="selected"]').forEach(ch => {
+      ch.checked = autoSelected.includes(ch.value);
+    });
+    if (urlParams.get('prop_min'))
+      document.getElementById('prop-min').value = urlParams.get('prop_min');
+    if (urlParams.get('prop_max'))
+      document.getElementById('prop-max').value = urlParams.get('prop_max');
+    if (urlParams.get('max_components'))
+      document.getElementById('max-class').value = urlParams.get('max_components');
+    if (urlParams.get('mse_threshold'))
+      document.getElementById('mse-threshold').value = urlParams.get('mse_threshold');
+    if (urlParams.get('method'))
+      document.getElementById('method').value = urlParams.get('method');
+
+    startOptimization(gatherParams());
   }
 })();
 </script>
