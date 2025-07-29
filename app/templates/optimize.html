@@ -45,7 +45,7 @@
   </label>
 
 
-  <button type="submit">Стартирай</button>
+  <button type="button" id="start-btn">Стартирай</button>
 </form>
 
 <div id="progress" style="display:none;">
@@ -67,7 +67,8 @@
   const constraintsDiv = document.getElementById('constraints');
 
   function selectedMaterials() {
-    return [...form.selected].filter(ch => ch.checked);
+    return [...form.querySelectorAll('input[name="selected"]')]
+      .filter(ch => ch.checked);
   }
 
   function addConstraintRow() {
@@ -145,8 +146,7 @@
     .catch(err => alert(err.error || 'Грешка при стартиране'));
   }
 
-  form.addEventListener('submit', e => {
-    e.preventDefault();
+  document.getElementById('start-btn').addEventListener('click', () => {
     startOptimization(gatherParams());
   });
 
