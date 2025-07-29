@@ -1,15 +1,12 @@
 from celery import Celery
-from .optimize import (
-    load_data,
-    optimize_combo,
-    MAX_COMPONENTS,
-    MSE_THRESHOLD,
-    WEIGHT_STEP,
-)
 from threading import Thread, Event
 import uuid
 from flask import current_app
 import math
+
+# Optimization functions and constants are imported lazily inside the worker
+# routines. This prevents circular imports when ``create_app`` loads this
+# module while the ``app.optimize`` module still depends on ``app``.
 
 celery = Celery(
     'hypercon',
@@ -42,17 +39,19 @@ class _LocalJob:
     def _run(self):
         # ``load_data`` and SQLAlchemy operations require an application context
         with self.app.app_context():
-            max_comp = self.params.get('max_components', MAX_COMPONENTS)
-            mse_thresh = self.params.get('mse_threshold', MSE_THRESHOLD)
+            from . import optimize as opt
+
+            max_comp = self.params.get('max_components', opt.MAX_COMPONENTS)
+            mse_thresh = self.params.get('mse_threshold', opt.MSE_THRESHOLD)
             try:
-                ids, values, target, prop_cols, constraints = load_data(self.params)
+                ids, values, target, prop_cols, constraints = opt.load_data(self.params)
             except Exception as exc:
                 self.status = 'FAILURE'
                 self.result = {'error': str(exc)}
                 return
 
             n = len(ids)
-            n_steps = int(round(1.0 / WEIGHT_STEP))
+            n_steps = int(round(1.0 / opt.WEIGHT_STEP))
             def weight_count(k):
                 return math.comb(n_steps + k - 1, k - 1)
             total = sum(math.comb(n, r) * weight_count(r) for r in range(1, min(max_comp, n) + 1))
@@ -67,7 +66,7 @@ class _LocalJob:
             progress.append({'step': step, 'best_mse': best})
 
         try:
-            out = optimize_combo(
+            out = opt.optimize_combo(
                 values,
                 target,
                 mse_threshold=mse_thresh,
@@ -139,16 +138,18 @@ def optimize_task(self, params):
     params идва от фронтенда и съдържа selected_ids, constraints,
     prop_min и prop_max.
     """
-    max_comp = params.get('max_components', MAX_COMPONENTS)
-    mse_thresh = params.get('mse_threshold', MSE_THRESHOLD)
+    from . import optimize as opt
+
+    max_comp = params.get('max_components', opt.MAX_COMPONENTS)
+    mse_thresh = params.get('mse_threshold', opt.MSE_THRESHOLD)
 
     try:
-        ids, values, target, prop_cols, constraints = load_data(params)
+        ids, values, target, prop_cols, constraints = opt.load_data(params)
     except ValueError as exc:
         return {'error': str(exc)}
 
     n = len(ids)
-    n_steps = int(round(1.0 / WEIGHT_STEP))
+    n_steps = int(round(1.0 / opt.WEIGHT_STEP))
     def weight_count(k):
         return math.comb(n_steps + k - 1, k - 1)
     total = sum(math.comb(n, r) * weight_count(r) for r in range(1, min(max_comp, n) + 1))
@@ -162,7 +163,7 @@ def optimize_task(self, params):
             self.update_state(state='PROGRESS', meta={'current': step, 'total': total, 'best_mse': best})
         progress.append({'step': step, 'best_mse': best})
 
-    out = optimize_combo(
+    out = opt.optimize_combo(
         values,
         target,
         mse_threshold=mse_thresh,
