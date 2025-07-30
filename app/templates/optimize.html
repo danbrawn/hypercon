@@ -2,55 +2,7 @@
 {% block content %}
 <h1>Оптимизация на рецепта</h1>
 
-<form id="opt-form">
-  <fieldset>
-    <legend>1. Избери материали</legend>
-    {% for m in materials %}
-      <label>
-        <input type="checkbox" name="selected" value="{{m.id}}" checked>
-        {{m.material_name}}
-      </label><br>
-    {% endfor %}
-  </fieldset>
-
-  <fieldset>
-    <legend>2. Ограничения (минимум, максимум)</legend>
-    <div id="constraints"></div>
-    <button type="button" id="add-constraint">Добави ограничение</button>
-    <button type="button" id="reset-constraints">Нулирай</button>
-  </fieldset>
-
-  <fieldset>
-    <legend>3. Граници на свойства</legend>
-    От
-    <select id="prop-min">
-      {% for c in prop_columns %}
-        <option value="{{c}}">{{c}}</option>
-      {% endfor %}
-    </select>
-    До
-    <select id="prop-max">
-      {% for c in prop_columns %}
-        <option value="{{c}}">{{c}}</option>
-      {% endfor %}
-    </select>
-  </fieldset>
-
-  <fieldset>
-    <legend>4. Настройки оптимизация</legend>
-    Максимални класове:
-    <input type="number" id="max-combo" value="5" min="1" max="{{materials|length}}">
-    MSE threshold:
-    <input type="number" id="mse-threshold" value="0.0004" step="0.0001">
-  </fieldset>
-
-  <button type="submit">Стартирай</button>
-</form>
-
-<div id="progress" style="display:none;">
-  <p>Прогрес: <span id="pct">0</span>%</p>
-  <p>Най‑добро MSE: <span id="best_mse">‑</span></p>
-</div>
+<button id="run" class="btn btn-primary">Стартирай</button>
 
 <div id="result" style="display:none;">
   <h3>Резултат</h3>
@@ -60,43 +12,11 @@
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
-document.getElementById('opt-form').addEventListener('submit', e=>{
-  e.preventDefault();
-  const sel  = [...e.target.selected].filter(c=>c.checked).map(c=>+c.value);
-  const cons = {}; /* read constraints from #constraints */
-  const params = {
-    selected_ids: sel,
-    constraints:  cons,
-    prop_min:     +document.getElementById('prop-min').value,
-    prop_max:     +document.getElementById('prop-max').value,
-    max_combo:    +document.getElementById('max-combo').value,
-    mse_threshold:+document.getElementById('mse-threshold').value,
-    target_profile: []  // you’ll fill this from your UI
-  };
-  fetch('/optimize/start',{
-    method:'POST',
-    headers:{'Content-Type':'application/json'},
-    body:JSON.stringify(params)
-  })
-  .then(r=>r.json())
-  .then(j=> poll(j.job_id));
+document.getElementById('run').addEventListener('click', ()=>{
+  fetch('/optimize/run', {method:'POST'})
+    .then(r=>r.json())
+    .then(showResult);
 });
-
-function poll(job_id){
-  document.getElementById('progress').style.display = 'block';
-  const iv = setInterval(()=>{
-    fetch(`/optimize/status/${job_id}`)
-      .then(r=>r.json())
-      .then(d=>{
-        document.getElementById('pct').textContent    = d.progress;
-        document.getElementById('best_mse').textContent= d.best_mse;
-        if(d.status==='SUCCESS'){
-          clearInterval(iv);
-          showResult(d.result);
-        }
-      });
-  }, 500);
-}
 
 function showResult(res){
   document.getElementById('result').style.display='block';
