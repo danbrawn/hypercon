@@ -88,7 +88,7 @@ def compute_mse(weights, values, target):
 
 
 def normalize_row(row: np.ndarray, power: float = POWER) -> np.ndarray:
-    """Normalize a property row using the specified power."""
+    """Normalize a numeric row using the specified exponent."""
     row = np.asarray(row, dtype=float)
     mn = row.min()
     mx = row.max()
@@ -96,6 +96,11 @@ def normalize_row(row: np.ndarray, power: float = POWER) -> np.ndarray:
         return np.zeros_like(row)
     return (row ** power - mn ** power) / (mx ** power - mn ** power)
 
+
+def etalon_from_columns(columns: list[str], power: float = POWER) -> np.ndarray:
+    """Return normalized profile computed only from column names."""
+    nums = np.array([float(c.replace("_", ".")) for c in columns], dtype=float)
+    return normalize_row(nums, power)
 
 
 def optimize_continuous(values, target):
@@ -120,17 +125,15 @@ def optimize_continuous(values, target):
 def run_full_optimization(schema: Optional[str] = None):
     """Helper that loads data and returns the best mix."""
 
-    ids, values, target_raw, prop_cols = load_data(schema)
+    ids, values, _target, prop_cols = load_data(schema)
 
-    # нормализирай всички редове
-    scaled_values = np.array([normalize_row(row) for row in values])
-    etalon = normalize_row(target_raw)
+    etalon = etalon_from_columns(prop_cols)
 
-    result = optimize_continuous(scaled_values, etalon)
+    result = optimize_continuous(values, etalon)
     if not result:
         return None
     mse, weights = result
-    mixed = np.dot(weights, scaled_values)
+    mixed = np.dot(weights, values)
     return {
         'material_ids': ids,
         'weights':      weights.tolist(),
