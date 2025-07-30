@@ -8,6 +8,7 @@ from flask import session, has_request_context
 from flask_login import current_user
 from typing import Optional
 import re
+import itertools
 
 try:  # SciPy is optional during development
     from scipy.optimize import minimize
@@ -16,11 +17,10 @@ except Exception:  # pragma: no cover
 
 from . import db
 
-# ── Constants ─────────────────────────────────────────────────────────
 # Степента за нормализация на профилите
 # Изведена от предоставените Excel формули
-
-POWER = 0.2175
+POWER = 0.217643428858232
+MAX_COMPONENTS = 7  # maximum number of materials considered in a mix
 # ─────────────────────────────────────────────────────────────────────────────
 
 import re
@@ -125,6 +125,29 @@ def optimize_continuous(values, target):
         return res.fun, res.x
     return None
 
+
+def find_best_mix(values: np.ndarray, target: np.ndarray,
+                  max_components: int = MAX_COMPONENTS):
+    """Search all material subsets up to ``max_components``."""
+
+    n = values.shape[0]
+    combos = [
+        combo
+        for r in range(1, min(max_components, n) + 1)
+        for combo in itertools.combinations(range(n), r)
+    ]
+
+    best = None
+    for combo in combos:
+        subvals = values[list(combo)]
+        out = optimize_continuous(subvals, target)
+        if out:
+            mse, weights = out
+            if best is None or mse < best[0]:
+                best = (mse, combo, weights)
+
+    return best
+
 def run_full_optimization(schema: Optional[str] = None):
     """Helper that loads data and returns the best mix."""
 
@@ -132,13 +155,14 @@ def run_full_optimization(schema: Optional[str] = None):
 
     etalon = etalon_from_columns(prop_cols)
 
-    result = optimize_continuous(values, etalon)
-    if not result:
+    best = find_best_mix(values, etalon)
+    if not best:
         return None
-    mse, weights = result
-    mixed = np.dot(weights, values)
+
+    mse, combo, weights = best
+    mixed = np.dot(weights, values[list(combo)])
     return {
-        'material_ids': ids,
+        'material_ids': [ids[i] for i in combo],
         'weights':      weights.tolist(),
         'best_mse':     mse,
         'prop_columns': prop_cols,
