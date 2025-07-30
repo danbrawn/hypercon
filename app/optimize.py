@@ -140,6 +140,41 @@ def optimize_continuous(values, target):
     return None
 
 
+def optimize_with_restarts(values: np.ndarray,
+                           target: np.ndarray,
+                           n_restarts: int = 20):
+    """Run SLSQP from multiple starting points and return the best result."""
+
+    if minimize is None:
+        raise RuntimeError("SciPy is required for continuous optimization")
+
+    k = values.shape[0]
+
+    def obj(w: np.ndarray) -> float:
+        return compute_mse(w, values, target)
+
+    bounds = [(0.0, 1.0)] * k
+    cons = ({'type': 'eq', 'fun': lambda w: w.sum() - 1.0},)
+
+    inits = [np.full(k, 1.0 / k)]
+    inits += list(np.random.dirichlet(np.ones(k), size=n_restarts))
+
+    best = None
+    for x0 in inits:
+        res = minimize(obj, x0,
+                       method='SLSQP',
+                       bounds=bounds,
+                       constraints=cons,
+                       options={'ftol': 1e-9, 'eps': 1e-4, 'maxiter': 50000})
+        if not res.success:
+            continue
+        cand = (res.fun, res.x)
+        if best is None or cand[0] < best[0]:
+            best = cand
+
+    return best
+
+
 def find_best_mix(values: np.ndarray, target: np.ndarray,
                   max_components: int = MAX_COMPONENTS):
     """Search all material subsets up to ``max_components``."""
@@ -154,7 +189,7 @@ def find_best_mix(values: np.ndarray, target: np.ndarray,
     best = None
     for combo in combos:
         subvals = values[list(combo)]
-        out = optimize_continuous(subvals, target)
+        out = optimize_with_restarts(subvals, target)
         if out:
             mse, weights = out
             if best is None or mse < best[0]:
