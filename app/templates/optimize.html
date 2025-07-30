@@ -47,7 +47,7 @@ function showResult(res){
       labels: res.prop_columns,
       datasets:[
         { label:'Target', data: res.target_profile, borderColor:'red', fill:false },
-        { label:'Mixed',  data: res.weights.map((w,i)=>w*res.target_profile[i]), borderColor:'blue', fill:false }
+        { label:'Mixed',  data: res.mixed_profile, borderColor:'blue', fill:false }
       ]
     }
   });
