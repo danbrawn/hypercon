@@ -202,7 +202,7 @@ def run_full_optimization(schema: Optional[str] = None):
 
     ids, values, _target, prop_cols = load_data(schema)
 
-    profiles = values
+    profiles = compute_profiles(values)
     etalon = etalon_from_columns(prop_cols)
 
     best = find_best_mix(profiles, etalon)
