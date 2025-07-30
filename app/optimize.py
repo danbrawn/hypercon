@@ -7,7 +7,6 @@ from sqlalchemy import MetaData, Table, select
 from flask import session, has_request_context
 from flask_login import current_user
 from typing import Optional
-import itertools
 import re
 
 try:  # SciPy is optional during development
@@ -18,8 +17,10 @@ except Exception:  # pragma: no cover
 from . import db
 
 # ── Constants ────────────────────────────────────────────────────────────────
-MAX_COMPONENTS = 7        # максимален брой материали в сместа
-MSE_THRESHOLD  = 0.0004
+# Степента за нормализация на профилите
+# NOTE: tuned so that the numeric column names 0.12..1000 produce
+# the expected etalon values described in the documentation
+POWER = 0.2175
 # ─────────────────────────────────────────────────────────────────────────────
 
 import re
@@ -88,6 +89,21 @@ def compute_mse(weights, values, target):
     return float(np.mean((mixed - target) ** 2))
 
 
+def normalize_row(row: np.ndarray, power: float = POWER) -> np.ndarray:
+    """Normalize a numeric row using the specified exponent."""
+    row = np.asarray(row, dtype=float)
+    mn = row.min()
+    mx = row.max()
+    if mx == mn:
+        return np.zeros_like(row)
+    return (row ** power - mn ** power) / (mx ** power - mn ** power)
+
+
+def etalon_from_columns(columns: list[str], power: float = POWER) -> np.ndarray:
+    """Return normalized profile computed only from column names."""
+    nums = np.array([float(c.replace("_", ".")) for c in columns], dtype=float)
+    return normalize_row(nums, power)
+
 
 def optimize_continuous(values, target):
     """Continuous optimization using scipy's SLSQP solver."""
@@ -108,42 +124,24 @@ def optimize_continuous(values, target):
         return res.fun, res.x
     return None
 
-def find_best_mix(values: np.ndarray, target: np.ndarray):
-    """Enumerate material subsets and optimize each via SLSQP."""
-
-    n = values.shape[0]
-    combos = [
-        combo
-        for r in range(1, min(MAX_COMPONENTS, n) + 1)
-        for combo in itertools.combinations(range(n), r)
-    ]
-    best = None
-
-    for combo in combos:
-        subvals = values[list(combo)]
-        out = optimize_continuous(subvals, target)
-        if out:
-            mse, weights = out
-            if best is None or mse < best[0]:
-                best = (mse, combo, weights)
-        if best and best[0] <= MSE_THRESHOLD:
-            break
-
-    return best
-
-
 def run_full_optimization(schema: Optional[str] = None):
     """Helper that loads data and returns the best mix."""
 
-    ids, values, target, prop_cols = load_data(schema)
-    result = find_best_mix(values, target)
+    ids, values, _target, prop_cols = load_data(schema)
+
+    etalon = etalon_from_columns(prop_cols)
+
+    result = optimize_continuous(values, etalon)
     if not result:
         return None
-    mse, combo, weights = result
+    mse, weights = result
+    mixed = np.dot(weights, values)
     return {
-        'material_ids': [ids[i] for i in combo],
+        'material_ids': ids,
         'weights':      weights.tolist(),
         'best_mse':     mse,
         'prop_columns': prop_cols,
-        'target_profile': target.tolist(),
+        'target_profile': etalon.tolist(),
+        'mixed_profile':  mixed.tolist(),
+
     }
