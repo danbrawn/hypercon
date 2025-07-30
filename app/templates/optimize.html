@@ -2,7 +2,15 @@
 {% block content %}
 <h1>Оптимизация на рецепта</h1>
 
-<button id="run" class="btn btn-primary">Стартирай</button>
+<div class="mb-3">
+  <strong>Схема:</strong> {{ schema }}<br>
+  <strong>Таблица:</strong> {{ table_name }}
+</div>
+
+<form id="opt-form">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <button id="run" class="btn btn-primary">Стартирай</button>
+</form>
 
 <div id="result" style="display:none;">
   <h3>Резултат</h3>
@@ -12,8 +20,13 @@
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
-document.getElementById('run').addEventListener('click', ()=>{
-  fetch('/optimize/run', {method:'POST'})
+document.getElementById('opt-form').addEventListener('submit', e=>{
+  e.preventDefault();
+  const formData = new FormData(e.target);
+  fetch('/optimize/run', {
+    method: 'POST',
+    body: formData
+  })
     .then(r=>r.json())
     .then(showResult);
 });
