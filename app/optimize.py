@@ -138,4 +138,5 @@ def run_full_optimization(schema: Optional[str] = None):
         'prop_columns': prop_cols,
         'target_profile': etalon.tolist(),
         'mixed_profile':  mixed.tolist(),
+
     }
