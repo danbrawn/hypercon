@@ -91,7 +91,6 @@ def compute_mse(weights, values, target):
 
 def compute_profiles(values: np.ndarray, power: float = POWER) -> np.ndarray:
     """Return normalized profiles using global column ranges."""
-
     values = np.asarray(values, dtype=float)
 
     mn = values.min(axis=0)
