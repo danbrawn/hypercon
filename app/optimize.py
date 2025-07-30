@@ -105,7 +105,6 @@ def etalon_from_columns(columns: list[str], power: float = POWER) -> np.ndarray:
     return normalize_row(nums, power)
 
 
-
 def optimize_continuous(values, target):
     """Continuous optimization using scipy's SLSQP solver."""
 
@@ -144,4 +143,5 @@ def run_full_optimization(schema: Optional[str] = None):
         'prop_columns': prop_cols,
         'target_profile': etalon.tolist(),
         'mixed_profile':  mixed.tolist(),
+
     }
