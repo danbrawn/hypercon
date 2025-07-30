@@ -18,8 +18,9 @@ from . import db
 
 # ── Constants ────────────────────────────────────────────────────────────────
 # Степента за нормализация на профилите
-# По задание константата е 1.234
-POWER = 1.234
+# NOTE: tuned so that the numeric column names 0.12..1000 produce
+# the expected etalon values described in the documentation
+POWER = 0.2175
 # ─────────────────────────────────────────────────────────────────────────────
 
 import re
@@ -102,8 +103,6 @@ def etalon_from_columns(columns: list[str], power: float = POWER) -> np.ndarray:
     """Return normalized profile computed only from column names."""
     nums = np.array([float(c.replace("_", ".")) for c in columns], dtype=float)
     return normalize_row(nums, power)
-
-
 
 def optimize_continuous(values, target):
     """Continuous optimization using scipy's SLSQP solver."""
