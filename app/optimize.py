@@ -90,9 +90,17 @@ def compute_mse(weights, values, target):
 
 
 def compute_profiles(values: np.ndarray, power: float = POWER) -> np.ndarray:
-    """Return normalized profiles for each material row."""
+    """Return normalized profiles using global column ranges."""
     values = np.asarray(values, dtype=float)
-    return np.array([normalize_row(row, power) for row in values])
+
+    mn = values.min(axis=0)
+    mx = values.max(axis=0)
+
+    num = values ** power - mn ** power
+    denom = mx ** power - mn ** power
+    denom[denom == 0] = 1.0
+
+    return num / denom
 
 
 def normalize_row(row: np.ndarray, power: float = POWER) -> np.ndarray:
