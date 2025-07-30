@@ -17,9 +17,7 @@ except Exception:  # pragma: no cover
 from . import db
 
 # ── Constants ────────────────────────────────────────────────────────────────
-# Степента за нормализация на профилите
-# NOTE: tuned so that the numeric column names 0.12..1000 produce
-# the expected etalon values described in the documentation
+
 POWER = 0.2175
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -101,8 +99,9 @@ def normalize_row(row: np.ndarray, power: float = POWER) -> np.ndarray:
 
 def etalon_from_columns(columns: list[str], power: float = POWER) -> np.ndarray:
     """Return normalized profile computed only from column names."""
-    nums = np.array([float(c.replace("_", ".")) for c in columns], dtype=float)
+    nums = np.array([_parse_numeric(c) for c in columns], dtype=float)
     return normalize_row(nums, power)
+
 
 
 def optimize_continuous(values, target):
@@ -143,5 +142,4 @@ def run_full_optimization(schema: Optional[str] = None):
         'prop_columns': prop_cols,
         'target_profile': etalon.tolist(),
         'mixed_profile':  mixed.tolist(),
-
     }
