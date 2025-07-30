@@ -89,6 +89,20 @@ def compute_mse(weights, values, target):
     return float(np.mean((mixed - target) ** 2))
 
 
+def compute_profiles(values: np.ndarray, power: float = POWER) -> np.ndarray:
+    """Return normalized profiles using global column ranges."""
+    values = np.asarray(values, dtype=float)
+
+    mn = values.min(axis=0)
+    mx = values.max(axis=0)
+
+    num = values ** power - mn ** power
+    denom = mx ** power - mn ** power
+    denom[denom == 0] = 1.0
+
+    return num / denom
+
+
 def normalize_row(row: np.ndarray, power: float = POWER) -> np.ndarray:
     """Normalize a numeric row using the specified exponent."""
     row = np.asarray(row, dtype=float)
@@ -153,14 +167,15 @@ def run_full_optimization(schema: Optional[str] = None):
 
     ids, values, _target, prop_cols = load_data(schema)
 
+    profiles = compute_profiles(values)
     etalon = etalon_from_columns(prop_cols)
 
-    best = find_best_mix(values, etalon)
+    best = find_best_mix(profiles, etalon)
     if not best:
         return None
 
     mse, combo, weights = best
-    mixed = np.dot(weights, values[list(combo)])
+    mixed = np.dot(weights, profiles[list(combo)])
     return {
         'material_ids': [ids[i] for i in combo],
         'weights':      weights.tolist(),
