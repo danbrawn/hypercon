@@ -18,7 +18,9 @@ from . import db
 
 # ── Constants ────────────────────────────────────────────────────────────────
 # Степента за нормализация на профилите
-POWER = 1.234
+# NOTE: tuned so that the numeric column names 0.12..1000 produce
+# the expected etalon values described in the documentation
+POWER = 0.2175
 # ─────────────────────────────────────────────────────────────────────────────
 
 import re
