@@ -14,7 +14,13 @@
 
 <div id="result" style="display:none;">
   <h3>Резултат</h3>
-  <pre id="text-result"></pre>
+  <p id="best-mse"></p>
+  <table class="table table-sm" id="weights-table">
+    <thead>
+      <tr><th>Материал ID</th><th>Тегло %</th></tr>
+    </thead>
+    <tbody id="weights-body"></tbody>
+  </table>
   <canvas id="chart" width="600" height="300"></canvas>
 </div>
 
@@ -34,12 +40,16 @@ form.addEventListener('submit', e => {
 
 function showResult(res){
   document.getElementById('result').style.display='block';
-  // текстов резултат
-  let txt = `Best MSE: ${res.best_mse}\n`;
+
+  // числова информация
+  document.getElementById('best-mse').textContent = `Best MSE: ${res.best_mse}`;
+  const tbody = document.getElementById('weights-body');
+  tbody.innerHTML = '';
   res.material_ids.forEach((id,i)=>{
-    txt += `Material ${id}: ${(res.weights[i]*100).toFixed(2)}%\n`;
+    const row = document.createElement('tr');
+    row.innerHTML = `<td>${id}</td><td>${(res.weights[i]*100).toFixed(2)}%</td>`;
+    tbody.appendChild(row);
   });
-  document.getElementById('text-result').textContent = txt;
 
   // графика
   new Chart(document.getElementById('chart'),{
