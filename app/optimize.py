@@ -301,10 +301,12 @@ def run_full_optimization(
     # unpack the best result
     mse, combo, weights = best
     # compute the mixed profile
-    mixed = weights.dot(values)
+    # Use only the columns corresponding to the chosen materials for mixing
+    mixed = weights.dot(values[list(combo)])
 
     return {
-        'material_ids': [ids[i] for i in combo],
+        # Convert NumPy integer IDs to plain Python ints for JSON serialization
+        'material_ids': [int(ids[i]) for i in combo],
         'weights':      weights.tolist(),
         'best_mse':     mse,
         'prop_columns': prop_cols,
