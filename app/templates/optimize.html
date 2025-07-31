@@ -9,7 +9,7 @@
 
 <form id="opt-form" action="{{ url_for('optimize_bp.run') }}" method="post">
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-  <button id="run" class="btn btn-primary">Стартирай</button>
+  <button id="run" type="button" class="btn btn-primary">Стартирай</button>
 </form>
 
 <div id="result" style="display:none;">
@@ -27,7 +27,8 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
 const form = document.getElementById('opt-form');
-form.addEventListener('submit', e => {
+const runBtn = document.getElementById('run');
+runBtn.addEventListener('click', e => {
   e.preventDefault();
   const formData = new FormData(form);
   fetch(form.action, {
