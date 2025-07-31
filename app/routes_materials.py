@@ -50,6 +50,8 @@ def import_excel():
     try:
         df = pd.read_excel(f)
         df.columns = df.columns.map(str)
+        # Treat empty cells or whitespace as missing values
+        df = df.replace(r'^\s*$', pd.NA, regex=True)
     except Exception as e:
         flash(f"Грешка при четене: {e}", "danger")
         return redirect(url_for("materials.page_materials"))
@@ -72,23 +74,48 @@ def import_excel():
     cols = list(tbl.columns.keys())
     keycol = "material_name" if "material_name" in cols else cols[0]
 
+    next_id = None
+    if "id" in cols:
+        from sqlalchemy import func
+
+        next_id = (
+            db.session.execute(select(func.max(tbl.c.id))).scalar() or 0
+        ) + 1
+
     # Upsert логика
     for _, row in df.iterrows():
-        data = {c: row[c] for c in df.columns if c in cols and pd.notna(row[c])}
+        data = {
+            c: row[c]
+            for c in df.columns
+            if c in cols and pd.notna(row[c])
+        }
+
+        for opt in ("density", "strength", "spg", "kwa"):
+            if opt in df.columns and pd.notna(row.get(opt)):
+                data[opt] = row[opt]
+
+        if "user_id" in cols:
+            data["user_id"] = getattr(current_user, "id", None)
+
         key = data.get(keycol)
         if key is None:
             continue
 
-        exists = db.session.execute(
-            select(tbl).where(tbl.c[keycol] == key)
-        ).first()
+        stmt = select(tbl).where(tbl.c[keycol] == key)
+        if "user_id" in cols:
+            stmt = stmt.where(tbl.c.user_id == current_user.id)
+        exists = db.session.execute(stmt).first()
 
         if exists:
-            upd = tbl.update().where(tbl.c[keycol] == key).values(
-                **{k: v for k, v in data.items() if k != keycol}
-            )
+            upd = tbl.update().where(tbl.c[keycol] == key)
+            if "user_id" in cols:
+                upd = upd.where(tbl.c.user_id == current_user.id)
+            upd = upd.values(**{k: v for k, v in data.items() if k != keycol})
             db.session.execute(upd)
         else:
+            if "id" in cols and "id" not in data and next_id is not None:
+                data["id"] = next_id
+                next_id += 1
             db.session.execute(tbl.insert().values(**data))
 
     db.session.commit()
