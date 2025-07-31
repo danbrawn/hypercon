@@ -33,11 +33,18 @@ runBtn.addEventListener('click', e => {
   const formData = new FormData(form);
   fetch(form.action, {
     method: 'POST',
-    body: formData
+    body: formData,
+    credentials: 'same-origin'
   })
-    .then(r => r.json())
-    .then(showResult);
-});
+    .then(r => {
+      if (!r.ok) return r.text().then(t => { throw new Error(t || r.status); });
+      return r.json();
+    })
+    .then(showResult)
+    .catch(err => {
+      console.error('Optimization error', err);
+      alert('Грешка при оптимизацията.');
+    });
 
 function showResult(res){
   document.getElementById('result').style.display='block';
@@ -53,16 +60,20 @@ function showResult(res){
   });
 
   // графика
-  new Chart(document.getElementById('chart'),{
-    type:'line',
-    data:{
-      labels: res.prop_columns,
-      datasets:[
-        { label:'Target', data: res.target_profile, borderColor:'red', fill:false },
-        { label:'Mixed',  data: res.mixed_profile, borderColor:'blue', fill:false }
-      ]
-    }
-  });
+  if (window.Chart) {
+    new Chart(document.getElementById('chart'),{
+      type:'line',
+      data:{
+        labels: res.prop_columns,
+        datasets:[
+          { label:'Target', data: res.target_profile, borderColor:'red', fill:false },
+          { label:'Mixed',  data: res.mixed_profile, borderColor:'blue', fill:false }
+        ]
+      }
+    });
+  } else {
+    console.error('Chart.js not loaded');
+  }
 }
 </script>
 {% endblock %}
