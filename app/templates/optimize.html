@@ -20,10 +20,11 @@
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
+const runUrl = "{{ url_for('optimize_bp.run') }}";
 document.getElementById('opt-form').addEventListener('submit', e=>{
   e.preventDefault();
   const formData = new FormData(e.target);
-  fetch('/optimize/run', {
+  fetch(runUrl, {
     method: 'POST',
     body: formData
   })
