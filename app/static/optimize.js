@@ -28,6 +28,7 @@ runBtn.addEventListener('click', e => {
     .catch(err => {
       console.error('Optimization error', err);
       alert(err.message || 'Грешка при оптимизацията.');
+
     })
     .finally(() => {
       spinner.classList.add('d-none');
