@@ -3,13 +3,14 @@ const runBtn = document.getElementById('run');
 const spinner = document.getElementById('spinner');
 const resultDiv = document.getElementById('result');
 const progressDiv = document.getElementById('progress');
+const progressUrl = progressDiv.dataset.url || 'progress';
 let progressTimer = null;
 const materials = JSON.parse(document.getElementById('materials-data').textContent);
 const addConstrBtn = document.getElementById('add-constr');
 const constrBody = document.getElementById('constraints-body');
 
 function fetchProgress() {
-  fetch('progress')
+  fetch(progressUrl)
     .then(r => r.json())
     .then(d => {
       if (d.total > 0) {
