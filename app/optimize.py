@@ -46,7 +46,7 @@ def _is_valid_prop(col: str, limit: float) -> bool:
     return num is not None and num <= limit
 
 def _get_materials_table(schema: Optional[str] = None):
-    """Връща таблицата materials_grit за указаната или текущата схема.
+    """Връща таблицата materials_grit за указаната или текущата схема."""
 
 
 def _is_valid_prop(col: str, limit: float) -> bool:
@@ -298,7 +298,10 @@ def run_full_optimization(
 
     if not best:
         return None
-
+    # unpack the best result
+    mse, combo, weights = best
+    # compute the mixed profile
+    mixed = weights.dot(values)
 
     return {
         'material_ids': [ids[i] for i in combo],
