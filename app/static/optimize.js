@@ -1,9 +1,14 @@
 const form = document.getElementById('opt-form');
 const runBtn = document.getElementById('run');
+const spinner = document.getElementById('spinner');
+const resultDiv = document.getElementById('result');
 
 runBtn.addEventListener('click', e => {
   e.preventDefault();
   const formData = new FormData(form);
+  runBtn.disabled = true;
+  resultDiv.classList.add('d-none');
+  spinner.classList.remove('d-none');
   fetch(form.action, {
     method: 'POST',
     body: formData,
@@ -17,12 +22,15 @@ runBtn.addEventListener('click', e => {
     .catch(err => {
       console.error('Optimization error', err);
       alert('Грешка при оптимизацията.');
+    })
+    .finally(() => {
+      spinner.classList.add('d-none');
+      runBtn.disabled = false;
     });
 });
 
 function showResult(res) {
-  const result = document.getElementById('result');
-  result.classList.remove('d-none');
+  resultDiv.classList.remove('d-none');
 
   document.getElementById('best-mse').textContent = `Best MSE: ${res.best_mse}`;
   const tbody = document.getElementById('weights-body');

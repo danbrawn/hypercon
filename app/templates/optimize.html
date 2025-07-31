@@ -10,6 +10,11 @@
 <form id="opt-form" action="{{ url_for('optimize_bp.run') }}" method="post">
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
   <button id="run" type="button" class="btn btn-primary">Стартирай</button>
+  <div id="spinner" class="d-none mt-2">
+    <div class="spinner-border" role="status">
+      <span class="visually-hidden">Изчакване...</span>
+    </div>
+  </div>
 </form>
 
 <div id="result" class="d-none">
@@ -26,5 +31,4 @@
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script src="{{ url_for('static', filename='optimize.js') }}"></script>
-
 {% endblock %}
