@@ -20,11 +20,12 @@ except Exception:  # pragma: no cover
 
 from . import db
 
-# Configuration constants
-POWER = 0.217643428858232      # exponent for normalization (from Excel)
-MAX_COMPONENTS = 7             # max number of materials in a mix
-MSE_THRESHOLD = 1e-4           # early stopping threshold for MSE
-RESTARTS = 10                  # number of SLSQP restarts
+# Степента за нормализация на профилите
+# Изведена от предоставените Excel формули
+POWER = 0.217643428858232
+MAX_COMPONENTS = 7  # maximum number of materials considered in a mix
+RESTARTS = 10       # number of random restarts for SLSQP
+
 
 # Utility to parse numeric column names
 import re
@@ -38,6 +39,14 @@ def _parse_numeric(val: str) -> Optional[float]:
 
 def _is_number(val: str) -> bool:
     return _parse_numeric(val) is not None
+
+
+def _is_valid_prop(col: str, limit: float) -> bool:
+    num = _parse_numeric(col)
+    return num is not None and num <= limit
+
+def _get_materials_table(schema: Optional[str] = None):
+    """Връща таблицата materials_grit за указаната или текущата схема.
 
 
 def _is_valid_prop(col: str, limit: float) -> bool:
@@ -112,22 +121,20 @@ def objective(w: np.ndarray, values: np.ndarray, target: np.ndarray) -> float:
     return compute_mse(w, values, target)
 
 
-def optimize_combo(combo: tuple[int, ...],
-                   values: np.ndarray,
-                   target: np.ndarray):
+def optimize_combo(
+    combo: tuple[int, ...],
+    values: np.ndarray,
+    target: np.ndarray,
+    n_restarts: int = 20,
+) -> tuple[float, tuple[int, ...], np.ndarray] | None:
+    """Optimize weights for a specific combination using multi-start SLSQP."""
+
     subset = values[list(combo)]
-    n = len(combo)
-    x0 = np.ones(n) / n
-    bounds = [(0.0, 1.0)] * n
-    cons = ({'type': 'eq', 'fun': lambda x: np.sum(x) - 1.0},)
-    res = minimize(objective,
-                   x0,
-                   args=(subset, target),
-                   bounds=bounds,
-                   constraints=cons,
-                   method='SLSQP',
-                   options={'ftol': 1e-9, 'disp': False})
-    return (res.fun, combo, res.x) if res.success else None
+    out = optimize_with_restarts(subset, target, n_restarts)
+    if not out:
+        return None
+    mse, weights = out
+    return mse, combo, weights
 
 
 def compute_profiles(values: np.ndarray, power: float = POWER) -> np.ndarray:
@@ -197,6 +204,25 @@ def optimize_with_restarts(values: np.ndarray,
     inits = [np.full(k, 1.0 / k)]
     inits += list(np.random.dirichlet(np.ones(k), size=n_restarts))
 
+def optimize_with_restarts(values: np.ndarray,
+                           target: np.ndarray,
+                           n_restarts: int = 20):
+    """Run SLSQP from multiple starting points and return the best result."""
+
+    if minimize is None:
+        raise RuntimeError("SciPy is required for continuous optimization")
+
+    k = values.shape[0]
+
+    def obj(w: np.ndarray) -> float:
+        return compute_mse(w, values, target)
+
+    bounds = [(0.0, 1.0)] * k
+    cons = ({'type': 'eq', 'fun': lambda w: w.sum() - 1.0},)
+
+    inits = [np.full(k, 1.0 / k)]
+    inits += list(np.random.dirichlet(np.ones(k), size=n_restarts))
+
     best = None
     for x0 in inits:
         res = minimize(obj, x0,
@@ -218,7 +244,9 @@ def find_best_mix(names: np.ndarray,
                   target: np.ndarray,
                   props: list[str],
                   max_combo_num: int,
-                  mse_threshold: float | None = None):
+                  mse_threshold: float | None = None,
+                  n_restarts: int = RESTARTS,
+                  ):
     """Evaluate all material combinations and return the best result."""
 
     n = values.shape[0]
@@ -233,7 +261,7 @@ def find_best_mix(names: np.ndarray,
         pct = i / total * 100
         sys.stdout.write(f"\rProgress: {pct:6.2f}% ({i}/{total})")
         sys.stdout.flush()
-        res = optimize_combo(combo, values, target)
+        res = optimize_combo(combo, values, target, n_restarts)
         if res:
             results.append(res)
             mse_val, combo_idx, frac_vals = res
@@ -266,7 +294,8 @@ def run_full_optimization(
     ids, names, values, target, prop_cols = load_recipe_data(property_limit, schema)
 
     best = find_best_mix(names, values, target, prop_cols,
-                         max_combo_num, mse_threshold)
+                         max_combo_num, mse_threshold, RESTARTS)
+
     if not best:
         return None
 
