@@ -281,8 +281,11 @@ def find_best_mix(names: np.ndarray,
     results: list[tuple[float, tuple[int, ...], np.ndarray]] = []
     for i, combo in enumerate(combos, 1):
         pct = i / total * 100
-        sys.stdout.write(f"\rProgress: {pct:6.2f}% ({i}/{total})")
-        sys.stdout.flush()
+        print(
+            f"Progress: {pct:6.2f}% ({i}/{total})",
+            end="\r",
+            flush=True,
+        )
         if progress_cb:
             progress_cb(i, total)
         # Skip combos that don't contain materials from equality/">" constraints
