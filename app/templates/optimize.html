@@ -7,7 +7,7 @@
   <strong>Таблица:</strong> {{ table_name }}
 </div>
 
-<form id="opt-form">
+<form id="opt-form" action="{{ url_for('optimize_bp.run') }}" method="post">
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
   <button id="run" class="btn btn-primary">Стартирай</button>
 </form>
@@ -20,14 +20,15 @@
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
-document.getElementById('opt-form').addEventListener('submit', e=>{
+const form = document.getElementById('opt-form');
+form.addEventListener('submit', e => {
   e.preventDefault();
-  const formData = new FormData(e.target);
-  fetch('/optimize/run', {
+  const formData = new FormData(form);
+  fetch(form.action, {
     method: 'POST',
     body: formData
   })
-    .then(r=>r.json())
+    .then(r => r.json())
     .then(showResult);
 });
 
