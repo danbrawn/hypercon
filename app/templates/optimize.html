@@ -9,12 +9,43 @@
 
 <form id="opt-form" action="{{ url_for('optimize_bp.run') }}" method="post">
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+  <table class="table table-striped" id="materials-table">
+    <thead>
+      <tr>
+        {% for col in columns %}
+          <th>{{ col == 'use' and 'Избор' or col }}</th>
+        {% endfor %}
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in rows %}
+        <tr>
+          <td><input type="checkbox" class="use-chk" value="{{ row['id'] }}" checked></td>
+          {% for col in columns[1:] %}
+            <td>{{ row[col] }}</td>
+          {% endfor %}
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <div class="mb-3">
+    <h5>Ограничения</h5>
+    <table class="table table-sm" id="constraints-table">
+      <thead><tr><th>Материал</th><th>Знак</th><th>Стойност</th></tr></thead>
+      <tbody id="constraints-body"></tbody>
+    </table>
+    <button type="button" id="add-constr" class="btn btn-secondary">Добави ограничение</button>
+  </div>
+
   <button id="run" type="button" class="btn btn-primary">Стартирай</button>
   <div id="spinner" class="d-none mt-2">
     <div class="spinner-border" role="status">
       <span class="visually-hidden">Изчакване...</span>
     </div>
   </div>
+  <div id="progress" data-url="{{ url_for('optimize_bp.progress') }}" class="mt-2"></div>
 </form>
 
 <div id="result" class="d-none">
@@ -29,6 +60,11 @@
   <canvas id="chart" width="600" height="300"></canvas>
 </div>
 
+<script id="materials-data" type="application/json">
+  [
+  {% for r in rows %}{"id": {{ r['id'] }}, "name": "{{ r['material_name'] }}"}{% if not loop.last %},{% endif %}{% endfor %}
+  ]
+</script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script src="{{ url_for('static', filename='optimize.js') }}"></script>
 {% endblock %}
