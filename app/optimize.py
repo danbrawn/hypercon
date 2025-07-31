@@ -26,6 +26,13 @@ POWER = 0.217643428858232
 MAX_COMPONENTS = 7  # maximum number of materials considered in a mix
 RESTARTS = 10       # number of random restarts for SLSQP
 
+# progress tracking shared by optimization routines
+_PROGRESS = {"total": 0, "done": 0}
+
+def get_progress() -> dict:
+    """Return current optimization progress."""
+    return dict(_PROGRESS)
+
 
 # Utility to parse numeric column names
 import re
@@ -88,14 +95,20 @@ def load_data(schema: Optional[str] = None):
     return ids, values, target, numeric_cols
 
 
-def load_recipe_data(property_limit: float, schema: Optional[str] = None):
-    """Load materials and numeric columns with optional limit."""
+def load_recipe_data(
+    property_limit: float,
+    schema: Optional[str] = None,
+    allowed_ids: Optional[list[int]] = None,
+):
+    """Load materials and numeric columns with optional limit and filtering."""
 
     tbl = _get_materials_table(schema)
 
     stmt = select(tbl)
     if 'user_id' in tbl.c:
         stmt = stmt.where(tbl.c.user_id == current_user.id)
+    if allowed_ids:
+        stmt = stmt.where(tbl.c.id.in_(allowed_ids))
 
     df = pd.read_sql(stmt, db.engine)
     df = df.replace(r'^\s*$', np.nan, regex=True)
@@ -126,11 +139,28 @@ def optimize_combo(
     values: np.ndarray,
     target: np.ndarray,
     n_restarts: int = 20,
+    constraints: list[tuple[int, str, float]] | None = None,
 ) -> tuple[float, tuple[int, ...], np.ndarray] | None:
     """Optimize weights for a specific combination using multi-start SLSQP."""
 
     subset = values[list(combo)]
-    out = optimize_with_restarts(subset, target, n_restarts)
+
+    # Convert global constraint indices to local positions
+    local_cons = []
+    if constraints:
+        pos_map = {g_idx: i for i, g_idx in enumerate(combo)}
+        for idx, op, val in constraints:
+            if idx not in pos_map:
+                continue
+            loc = pos_map[idx]
+            if op == '>':
+                local_cons.append({'type': 'ineq', 'fun': lambda w, l=loc, v=val: w[l] - v})
+            elif op == '<':
+                local_cons.append({'type': 'ineq', 'fun': lambda w, l=loc, v=val: v - w[l]})
+            elif op == '=':
+                local_cons.append({'type': 'eq', 'fun': lambda w, l=loc, v=val: w[l] - v})
+
+    out = optimize_with_restarts(subset, target, n_restarts, local_cons)
     if not out:
         return None
     mse, weights = out
@@ -177,17 +207,12 @@ def compute_mse(weights: np.ndarray,
     return float(np.mean((mix - target)**2))
 
 # Continuous optimization with restarts to avoid local minima
-def optimize_with_restarts(values: np.ndarray,
-                           target: np.ndarray,
-                           n_restarts: int = RESTARTS):
-    k = values.shape[0]
-    bounds = [(0.0, 1.0)] * k
-    cons = ({'type': 'eq', 'fun': lambda w: w.sum() - 1.0},)
-    best = None
-
-def optimize_with_restarts(values: np.ndarray,
-                           target: np.ndarray,
-                           n_restarts: int = 20):
+def optimize_with_restarts(
+    values: np.ndarray,
+    target: np.ndarray,
+    n_restarts: int = 20,
+    extra_cons: list[dict] | None = None,
+):
     """Run SLSQP from multiple starting points and return the best result."""
 
     if minimize is None:
@@ -199,37 +224,23 @@ def optimize_with_restarts(values: np.ndarray,
         return compute_mse(w, values, target)
 
     bounds = [(0.0, 1.0)] * k
-    cons = ({'type': 'eq', 'fun': lambda w: w.sum() - 1.0},)
-
-    inits = [np.full(k, 1.0 / k)]
-    inits += list(np.random.dirichlet(np.ones(k), size=n_restarts))
-
-def optimize_with_restarts(values: np.ndarray,
-                           target: np.ndarray,
-                           n_restarts: int = 20):
-    """Run SLSQP from multiple starting points and return the best result."""
-
-    if minimize is None:
-        raise RuntimeError("SciPy is required for continuous optimization")
-
-    k = values.shape[0]
-
-    def obj(w: np.ndarray) -> float:
-        return compute_mse(w, values, target)
-
-    bounds = [(0.0, 1.0)] * k
-    cons = ({'type': 'eq', 'fun': lambda w: w.sum() - 1.0},)
+    cons = [{'type': 'eq', 'fun': lambda w: w.sum() - 1.0}]
+    if extra_cons:
+        cons.extend(extra_cons)
 
     inits = [np.full(k, 1.0 / k)]
     inits += list(np.random.dirichlet(np.ones(k), size=n_restarts))
 
     best = None
     for x0 in inits:
-        res = minimize(obj, x0,
-                       method='SLSQP',
-                       bounds=bounds,
-                       constraints=cons,
-                       options={'ftol': 1e-9, 'eps': 1e-4, 'maxiter': 50000})
+        res = minimize(
+            obj,
+            x0,
+            method='SLSQP',
+            bounds=bounds,
+            constraints=cons,
+            options={'ftol': 1e-9, 'eps': 1e-4, 'maxiter': 50000},
+        )
         if not res.success:
             continue
         cand = (res.fun, res.x)
@@ -246,6 +257,8 @@ def find_best_mix(names: np.ndarray,
                   max_combo_num: int,
                   mse_threshold: float | None = None,
                   n_restarts: int = RESTARTS,
+                  constraints: list[tuple[int, str, float]] | None = None,
+                  progress_cb=None,
                   ):
     """Evaluate all material combinations and return the best result."""
 
@@ -254,6 +267,8 @@ def find_best_mix(names: np.ndarray,
     for r in range(1, min(max_combo_num, n) + 1):
         combos.extend(itertools.combinations(range(n), r))
     total = len(combos)
+    if progress_cb:
+        progress_cb(0, total)
 
     best = None
     results: list[tuple[float, tuple[int, ...], np.ndarray]] = []
@@ -261,7 +276,19 @@ def find_best_mix(names: np.ndarray,
         pct = i / total * 100
         sys.stdout.write(f"\rProgress: {pct:6.2f}% ({i}/{total})")
         sys.stdout.flush()
-        res = optimize_combo(combo, values, target, n_restarts)
+        if progress_cb:
+            progress_cb(i, total)
+        # Skip combos that don't contain materials from equality/">" constraints
+        if constraints:
+            required = {
+                idx
+                for idx, op, _ in constraints
+                if op in ('=', '>')
+            }
+            if not required.issubset(set(combo)):
+                continue
+
+        res = optimize_combo(combo, values, target, n_restarts, constraints)
         if res:
             results.append(res)
             mse_val, combo_idx, frac_vals = res
@@ -288,13 +315,44 @@ def run_full_optimization(
     property_limit: float = 1000.0,
     max_combo_num: int = MAX_COMPONENTS,
     mse_threshold: float | None = 0.0004,
+    material_ids: Optional[list[int]] = None,
+    constraints: Optional[list[tuple[int, str, float]]] = None,
 ):
     """Load materials and search for the optimal mix."""
 
-    ids, names, values, target, prop_cols = load_recipe_data(property_limit, schema)
+    # reset progress
+    _PROGRESS["total"] = 0
+    _PROGRESS["done"] = 0
 
-    best = find_best_mix(names, values, target, prop_cols,
-                         max_combo_num, mse_threshold, RESTARTS)
+    ids, names, values, target, prop_cols = load_recipe_data(
+        property_limit, schema, material_ids
+    )
+
+    # Map DB id -> index in arrays
+    id_to_idx = {mid: i for i, mid in enumerate(ids)}
+    constr_idx: list[tuple[int, str, float]] = []
+    if constraints:
+        for mid, op, val in constraints:
+            if mid in id_to_idx:
+                constr_idx.append((id_to_idx[mid], op, float(val)))
+
+    def progress_cb(done: int, total: int):
+        _PROGRESS["total"] = int(total)
+        _PROGRESS["done"] = int(done)
+
+    best = find_best_mix(
+        names,
+        values,
+        target,
+        prop_cols,
+        max_combo_num,
+        mse_threshold,
+        RESTARTS,
+        constr_idx,
+        progress_cb,
+    )
+
+    _PROGRESS["done"] = _PROGRESS.get("total", 0)
 
     if not best:
         return None
