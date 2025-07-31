@@ -10,7 +10,7 @@ const addConstrBtn = document.getElementById('add-constr');
 const constrBody = document.getElementById('constraints-body');
 
 function fetchProgress() {
-  fetch(progressUrl)
+  fetch(progressUrl, { credentials: 'same-origin' })
     .then(r => r.json())
     .then(d => {
       if (d.total > 0) {
@@ -140,14 +140,18 @@ runBtn.addEventListener('click', e => {
     credentials: 'same-origin'
   })
     .then(r =>
-      r
-        .json()
-        .then(data => {
-          if (!r.ok || data.error) {
-            throw new Error(data.error || r.status);
-          }
-          return data;
-        })
+      r.text().then(t => {
+        let data;
+        try {
+          data = JSON.parse(t);
+        } catch (e) {
+          throw new Error(t || r.status);
+        }
+        if (!r.ok || data.error) {
+          throw new Error(data.error || r.status);
+        }
+        return data;
+      })
     )
     .then(showResult)
     .catch(err => {

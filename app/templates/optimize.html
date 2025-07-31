@@ -61,9 +61,7 @@
 </div>
 
 <script id="materials-data" type="application/json">
-  [
-  {% for r in rows %}{"id": {{ r['id'] }}, "name": "{{ r['material_name'] }}"}{% if not loop.last %},{% endif %}{% endfor %}
-  ]
+  {{ materials|tojson }}
 </script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script src="{{ url_for('static', filename='optimize.js') }}"></script>

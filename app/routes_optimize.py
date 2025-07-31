@@ -17,12 +17,14 @@ def page():
     nonnum = [c for c in cols if not c.isdigit()]
     num = sorted([c for c in cols if c.isdigit()], key=lambda x: int(x))
     columns = ['use'] + nonnum + num
+    materials = [{'id': r['id'], 'name': r['material_name']} for r in rows]
     return render_template(
         'optimize.html',
         schema=schema,
         table_name=table_name,
         columns=columns,
         rows=rows,
+        materials=materials,
     )
 
 @bp.route('/run', methods=['POST'])
