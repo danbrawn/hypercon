@@ -50,6 +50,8 @@ def import_excel():
     try:
         df = pd.read_excel(f)
         df.columns = df.columns.map(str)
+        # Treat empty cells or whitespace as missing values
+        df = df.replace(r'^\s*$', pd.NA, regex=True)
     except Exception as e:
         flash(f"Грешка при четене: {e}", "danger")
         return redirect(url_for("materials.page_materials"))

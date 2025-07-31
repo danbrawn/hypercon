@@ -6,16 +6,75 @@ const materials = JSON.parse(document.getElementById('materials-data').textConte
 const addConstrBtn = document.getElementById('add-constr');
 const constrBody = document.getElementById('constraints-body');
 
+// prevent form submission when pressing Enter
+form.addEventListener('submit', e => e.preventDefault());
+
+function getSelectedIds() {
+  return Array.from(document.querySelectorAll('.use-chk:checked')).map(c =>
+    parseInt(c.value)
+  );
+}
+
+function updateConstraintOptions() {
+  const ids = getSelectedIds();
+  const rows = Array.from(constrBody.querySelectorAll('tr'));
+  rows.forEach(row => {
+    const sel = row.querySelector('.con-mat');
+    const current = parseInt(sel.value);
+    // remove options for unchecked materials
+    Array.from(sel.options).forEach(o => {
+      const val = parseInt(o.value);
+      if (!ids.includes(val)) {
+        if (val === current) {
+          row.remove();
+        }
+        o.remove();
+      }
+    });
+    // add options for newly checked materials
+    ids.forEach(id => {
+      if (!sel.querySelector(`option[value="${id}"]`)) {
+        const m = materials.find(mm => mm.id === id);
+        if (m) {
+          const opt = document.createElement('option');
+          opt.value = id;
+          opt.textContent = m.name;
+          sel.appendChild(opt);
+        }
+      }
+    });
+    if (!sel.options.length) {
+      row.remove();
+    } else if (!ids.includes(current)) {
+      sel.value = sel.options[0].value;
+    }
+  });
+}
+
+document.querySelectorAll('.use-chk').forEach(chk =>
+  chk.addEventListener('change', updateConstraintOptions)
+);
+
+// initial setup
+updateConstraintOptions();
+
 addConstrBtn.addEventListener('click', () => {
+  const ids = getSelectedIds();
+  if (!ids.length) {
+    return;
+  }
   const tr = document.createElement('tr');
   const td1 = document.createElement('td');
   const sel = document.createElement('select');
   sel.className = 'con-mat';
-  materials.forEach(m => {
-    const o = document.createElement('option');
-    o.value = m.id;
-    o.textContent = m.name;
-    sel.appendChild(o);
+  ids.forEach(id => {
+    const m = materials.find(mm => mm.id === id);
+    if (m) {
+      const o = document.createElement('option');
+      o.value = id;
+      o.textContent = m.name;
+      sel.appendChild(o);
+    }
   });
   td1.appendChild(sel);
   const td2 = document.createElement('td');
@@ -46,7 +105,7 @@ runBtn.addEventListener('click', e => {
   e.preventDefault();
   const formData = new FormData();
   formData.append('csrf_token', form.querySelector('input[name="csrf_token"]').value);
-  const ids = Array.from(document.querySelectorAll('.use-chk:checked')).map(c => parseInt(c.value));
+  const ids = getSelectedIds();
   const constr = Array.from(constrBody.querySelectorAll('tr')).map(tr => ({
     id: parseInt(tr.querySelector('.con-mat').value),
     op: tr.querySelector('.con-op').value,
