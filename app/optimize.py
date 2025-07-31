@@ -304,6 +304,7 @@ def run_full_optimization(
     mixed = weights.dot(values)
 
     return {
+        # Convert NumPy integer IDs to plain Python ints for JSON serialization
         'material_ids': [int(ids[i]) for i in combo],
         'weights':      weights.tolist(),
         'best_mse':     mse,
