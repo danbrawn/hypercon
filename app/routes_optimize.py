@@ -50,8 +50,10 @@ def run():
 
     user_id = current_user.id if hasattr(current_user, 'id') else None
 
+    app = current_app._get_current_object()
+
     def worker():
-        with current_app.app_context():
+        with app.app_context():
             try:
                 res = run_full_optimization(
                     schema=schema,
