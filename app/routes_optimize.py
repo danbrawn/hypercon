@@ -2,7 +2,7 @@ from flask import Blueprint, render_template, jsonify, request
 from flask_login import login_required
 
 from . import db
-from .optimize import run_full_optimization, _get_materials_table
+from .optimize import run_full_optimization, _get_materials_table, get_progress
 
 bp = Blueprint('optimize_bp', __name__)
 
@@ -46,3 +46,9 @@ def run():
     if result is None:
         return jsonify(error='Optimization failed'), 400
     return jsonify(result)
+
+
+@bp.route('/progress', methods=['GET'])
+@login_required
+def progress():
+    return jsonify(get_progress())

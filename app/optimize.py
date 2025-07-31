@@ -26,6 +26,13 @@ POWER = 0.217643428858232
 MAX_COMPONENTS = 7  # maximum number of materials considered in a mix
 RESTARTS = 10       # number of random restarts for SLSQP
 
+# progress tracking shared by optimization routines
+_PROGRESS = {"total": 0, "done": 0}
+
+def get_progress() -> dict:
+    """Return current optimization progress."""
+    return dict(_PROGRESS)
+
 
 # Utility to parse numeric column names
 import re
@@ -251,6 +258,7 @@ def find_best_mix(names: np.ndarray,
                   mse_threshold: float | None = None,
                   n_restarts: int = RESTARTS,
                   constraints: list[tuple[int, str, float]] | None = None,
+                  progress_cb=None,
                   ):
     """Evaluate all material combinations and return the best result."""
 
@@ -259,6 +267,8 @@ def find_best_mix(names: np.ndarray,
     for r in range(1, min(max_combo_num, n) + 1):
         combos.extend(itertools.combinations(range(n), r))
     total = len(combos)
+    if progress_cb:
+        progress_cb(0, total)
 
     best = None
     results: list[tuple[float, tuple[int, ...], np.ndarray]] = []
@@ -266,6 +276,8 @@ def find_best_mix(names: np.ndarray,
         pct = i / total * 100
         sys.stdout.write(f"\rProgress: {pct:6.2f}% ({i}/{total})")
         sys.stdout.flush()
+        if progress_cb:
+            progress_cb(i, total)
         # Skip combos that don't contain materials from equality/">" constraints
         if constraints:
             required = {
@@ -308,6 +320,10 @@ def run_full_optimization(
 ):
     """Load materials and search for the optimal mix."""
 
+    # reset progress
+    _PROGRESS["total"] = 0
+    _PROGRESS["done"] = 0
+
     ids, names, values, target, prop_cols = load_recipe_data(
         property_limit, schema, material_ids
     )
@@ -320,6 +336,10 @@ def run_full_optimization(
             if mid in id_to_idx:
                 constr_idx.append((id_to_idx[mid], op, float(val)))
 
+    def progress_cb(done: int, total: int):
+        _PROGRESS["total"] = int(total)
+        _PROGRESS["done"] = int(done)
+
     best = find_best_mix(
         names,
         values,
@@ -329,7 +349,10 @@ def run_full_optimization(
         mse_threshold,
         RESTARTS,
         constr_idx,
+        progress_cb,
     )
+
+    _PROGRESS["done"] = _PROGRESS.get("total", 0)
 
     if not best:
         return None

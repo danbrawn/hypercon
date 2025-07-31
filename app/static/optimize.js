@@ -2,9 +2,23 @@ const form = document.getElementById('opt-form');
 const runBtn = document.getElementById('run');
 const spinner = document.getElementById('spinner');
 const resultDiv = document.getElementById('result');
+const progressDiv = document.getElementById('progress');
+let progressTimer = null;
 const materials = JSON.parse(document.getElementById('materials-data').textContent);
 const addConstrBtn = document.getElementById('add-constr');
 const constrBody = document.getElementById('constraints-body');
+
+function fetchProgress() {
+  fetch('progress')
+    .then(r => r.json())
+    .then(d => {
+      if (d.total > 0) {
+        const pct = ((d.done / d.total) * 100).toFixed(2);
+        progressDiv.textContent = `Прогрес: ${pct}% (${d.done}/${d.total})`;
+      }
+    })
+    .catch(() => {});
+}
 
 // prevent form submission when pressing Enter
 form.addEventListener('submit', e => e.preventDefault());
@@ -115,6 +129,9 @@ runBtn.addEventListener('click', e => {
   formData.append('constraints', JSON.stringify(constr));
   runBtn.disabled = true;
   resultDiv.classList.add('d-none');
+  progressDiv.textContent = '';
+  progressTimer = setInterval(fetchProgress, 2000);
+  fetchProgress();
   spinner.classList.remove('d-none');
   fetch(form.action, {
     method: 'POST',
@@ -140,6 +157,11 @@ runBtn.addEventListener('click', e => {
     .finally(() => {
       spinner.classList.add('d-none');
       runBtn.disabled = false;
+      if (progressTimer) {
+        clearInterval(progressTimer);
+        progressTimer = null;
+        fetchProgress();
+      }
     });
 });
 
@@ -170,3 +192,4 @@ function showResult(res) {
     console.error('Chart.js not loaded');
   }
 }
+
