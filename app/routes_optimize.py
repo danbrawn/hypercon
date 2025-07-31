@@ -1,5 +1,5 @@
-from flask import Blueprint, render_template, jsonify, request
-from flask_login import login_required
+from flask import Blueprint, render_template, jsonify, request, current_app
+from flask_login import login_required, current_user
 from threading import Thread
 from uuid import uuid4
 
@@ -39,6 +39,7 @@ def run():
 
     materials_raw = request.form.get('materials')
     constraints_raw = request.form.get('constraints')
+    schema = request.form.get('schema') or None
 
     material_ids = json.loads(materials_raw) if materials_raw else None
     constr = json.loads(constraints_raw) if constraints_raw else None
@@ -47,18 +48,23 @@ def run():
     progress = {"total": 0, "done": 0}
     _jobs[job_id] = {"progress": progress, "result": None, "error": None}
 
+    user_id = current_user.id if hasattr(current_user, 'id') else None
+
     def worker():
-        try:
-            res = run_full_optimization(
-                material_ids=material_ids,
-                constraints=[(int(c['id']), c['op'], float(c['val'])) for c in constr] if constr else None,
-                progress=progress,
-            )
-            _jobs[job_id]["result"] = res
-        except Exception as exc:
-            _jobs[job_id]["error"] = str(exc)
-        finally:
-            progress["done"] = progress.get("total", 0)
+        with current_app.app_context():
+            try:
+                res = run_full_optimization(
+                    schema=schema,
+                    material_ids=material_ids,
+                    constraints=[(int(c['id']), c['op'], float(c['val'])) for c in constr] if constr else None,
+                    progress=progress,
+                    user_id=user_id,
+                )
+                _jobs[job_id]["result"] = res
+            except Exception as exc:
+                _jobs[job_id]["error"] = str(exc)
+            finally:
+                progress["done"] = progress.get("total", 0)
 
     Thread(target=worker, daemon=True).start()
 

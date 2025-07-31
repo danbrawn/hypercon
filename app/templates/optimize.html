@@ -9,6 +9,7 @@
 
 <form id="opt-form" action="{{ url_for('optimize_bp.run') }}" method="post">
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <input type="hidden" name="schema" value="{{ schema }}">
 
   <table class="table table-striped" id="materials-table">
     <thead>
