@@ -317,12 +317,16 @@ def run_full_optimization(
     mse_threshold: float | None = 0.0004,
     material_ids: Optional[list[int]] = None,
     constraints: Optional[list[tuple[int, str, float]]] = None,
+    progress: Optional[dict] = None,
 ):
     """Load materials and search for the optimal mix."""
 
+    # choose progress dict
+    prog = progress if progress is not None else _PROGRESS
+
     # reset progress
-    _PROGRESS["total"] = 0
-    _PROGRESS["done"] = 0
+    prog["total"] = 0
+    prog["done"] = 0
 
     ids, names, values, target, prop_cols = load_recipe_data(
         property_limit, schema, material_ids
@@ -337,8 +341,8 @@ def run_full_optimization(
                 constr_idx.append((id_to_idx[mid], op, float(val)))
 
     def progress_cb(done: int, total: int):
-        _PROGRESS["total"] = int(total)
-        _PROGRESS["done"] = int(done)
+        prog["total"] = int(total)
+        prog["done"] = int(done)
 
     best = find_best_mix(
         names,
@@ -352,7 +356,7 @@ def run_full_optimization(
         progress_cb,
     )
 
-    _PROGRESS["done"] = _PROGRESS.get("total", 0)
+    prog["done"] = prog.get("total", 0)
 
     if not best:
         return None

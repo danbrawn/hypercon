@@ -45,7 +45,7 @@
       <span class="visually-hidden">Изчакване...</span>
     </div>
   </div>
-  <div id="progress" data-url="{{ url_for('optimize_bp.progress') }}" class="mt-2"></div>
+  <div id="progress" data-url="{{ url_for('optimize_bp.progress', job_id='') }}" class="mt-2"></div>
 </form>
 
 <div id="result" class="d-none">
