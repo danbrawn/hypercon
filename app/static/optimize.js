@@ -165,6 +165,11 @@ runBtn.addEventListener('click', e => {
       alert(err.message || 'Грешка при оптимизацията.');
       spinner.classList.add('d-none');
       runBtn.disabled = false;
+      if (progressTimer) {
+        clearInterval(progressTimer);
+        progressTimer = null;
+        fetchProgress();
+      }
     });
   // cleanup handled in fetchProgress when job finishes
 });
