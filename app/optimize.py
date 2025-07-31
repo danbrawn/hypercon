@@ -312,7 +312,7 @@ def find_best_mix(names: np.ndarray,
                 break
     sys.stdout.write("\n")
     if not results:
-        raise RuntimeError('Няма успешно решение за оптимизация')
+        return None
     if best is None:
         best = min(results, key=lambda t: t[0])
     return best
