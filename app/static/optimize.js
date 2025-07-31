@@ -14,14 +14,21 @@ runBtn.addEventListener('click', e => {
     body: formData,
     credentials: 'same-origin'
   })
-    .then(r => {
-      if (!r.ok) return r.text().then(t => { throw new Error(t || r.status); });
-      return r.json();
-    })
+    .then(r =>
+      r
+        .json()
+        .then(data => {
+          if (!r.ok || data.error) {
+            throw new Error(data.error || r.status);
+          }
+          return data;
+        })
+    )
     .then(showResult)
     .catch(err => {
       console.error('Optimization error', err);
-      alert('Грешка при оптимизацията.');
+      alert(err.message || 'Грешка при оптимизацията.');
+
     })
     .finally(() => {
       spinner.classList.add('d-none');
