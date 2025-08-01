@@ -5,6 +5,8 @@ const resultDiv = document.getElementById('result');
 const materials = JSON.parse(document.getElementById('materials-data').textContent);
 const addConstrBtn = document.getElementById('add-constr');
 const constrBody = document.getElementById('constraints-body');
+const selectAllBtn = document.getElementById('select-all');
+const unselectAllBtn = document.getElementById('unselect-all');
 
 // prevent form submission when pressing Enter
 form.addEventListener('submit', e => e.preventDefault());
@@ -54,6 +56,17 @@ function updateConstraintOptions() {
 document.querySelectorAll('.use-chk').forEach(chk =>
   chk.addEventListener('change', updateConstraintOptions)
 );
+
+if (selectAllBtn && unselectAllBtn) {
+  selectAllBtn.addEventListener('click', () => {
+    document.querySelectorAll('.use-chk').forEach(c => (c.checked = true));
+    updateConstraintOptions();
+  });
+  unselectAllBtn.addEventListener('click', () => {
+    document.querySelectorAll('.use-chk').forEach(c => (c.checked = false));
+    updateConstraintOptions();
+  });
+}
 
 // initial setup
 updateConstraintOptions();
@@ -134,7 +147,7 @@ runBtn.addEventListener('click', e => {
     .then(showResult)
     .catch(err => {
       console.error('Optimization error', err);
-      alert(err.message || 'Грешка при оптимизацията.');
+      alert(err.message || 'Optimization error.');
 
     })
     .finally(() => {
@@ -144,6 +157,12 @@ runBtn.addEventListener('click', e => {
 });
 
 function showResult(res) {
+  if (!res || !Array.isArray(res.material_ids) || !Array.isArray(res.weights)) {
+    alert(res && res.error ? res.error : 'Invalid optimization response.');
+    console.error('Invalid response', res);
+    return;
+  }
+
   resultDiv.classList.remove('d-none');
 
   document.getElementById('best-mse').textContent = `Best MSE: ${res.best_mse}`;
