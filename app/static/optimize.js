@@ -157,6 +157,12 @@ runBtn.addEventListener('click', e => {
 });
 
 function showResult(res) {
+  if (!res || !Array.isArray(res.material_ids) || !Array.isArray(res.weights)) {
+    alert(res && res.error ? res.error : 'Invalid optimization response.');
+    console.error('Invalid response', res);
+    return;
+  }
+
   resultDiv.classList.remove('d-none');
 
   document.getElementById('best-mse').textContent = `Best MSE: ${res.best_mse}`;
