@@ -22,7 +22,7 @@ def login():
             else:
                 session.pop("schema", None)
             return redirect(url_for("materials.page_materials"))
-        flash("Невалиден потребител или парола.", "danger")
+        flash("Invalid username or password.", "danger")
 
     return render_template("login.html")
 
@@ -32,5 +32,5 @@ def login():
 def logout():
     logout_user()
     session.pop("schema", None)
-    flash("Излязохте успешно.", "info")
+    flash("Logged out successfully.", "info")
     return redirect(url_for("auth.login"))
