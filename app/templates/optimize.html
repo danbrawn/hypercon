@@ -11,6 +11,11 @@
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
   <input type="hidden" name="schema" value="{{ schema }}">
 
+  <div class="mb-2">
+    <button type="button" id="select-all" class="btn btn-sm btn-secondary">Select All</button>
+    <button type="button" id="unselect-all" class="btn btn-sm btn-secondary">Unselect All</button>
+  </div>
+
   <table class="table table-striped" id="materials-table">
     <thead>
       <tr>

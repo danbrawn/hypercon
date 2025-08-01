@@ -121,3 +121,17 @@ def import_excel():
     db.session.commit()
     flash("Import successful.", "success")
     return redirect(url_for("materials.page_materials"))
+
+
+@bp.route("/materials/delete", methods=["POST"])
+@login_required
+def delete_rows():
+    ids = request.form.getlist("row_id")
+    if ids:
+        tbl = get_materials_table()
+        db.session.execute(tbl.delete().where(tbl.c.id.in_(map(int, ids))))
+        db.session.commit()
+        flash("Rows deleted.", "success")
+    else:
+        flash("No rows selected.", "warning")
+    return redirect(url_for("materials.page_materials"))
