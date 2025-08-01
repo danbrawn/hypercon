@@ -2,9 +2,38 @@ const form = document.getElementById('opt-form');
 const runBtn = document.getElementById('run');
 const spinner = document.getElementById('spinner');
 const resultDiv = document.getElementById('result');
+const progressDiv = document.getElementById('progress');
+const progressUrl = progressDiv.dataset.url || 'progress/';
+let progressTimer = null;
+let currentJob = null;
 const materials = JSON.parse(document.getElementById('materials-data').textContent);
 const addConstrBtn = document.getElementById('add-constr');
 const constrBody = document.getElementById('constraints-body');
+
+function fetchProgress() {
+  if (!currentJob) return;
+  fetch(progressUrl + currentJob, { credentials: 'same-origin' })
+    .then(r => r.json())
+    .then(d => {
+      if (d.total > 0) {
+        const pct = ((d.done / d.total) * 100).toFixed(2);
+        progressDiv.textContent = `Progress: ${pct}% (${d.done}/${d.total})`;
+      }
+      if (d.result || d.error) {
+        clearInterval(progressTimer);
+        progressTimer = null;
+        spinner.classList.add('d-none');
+        runBtn.disabled = false;
+        if (d.result) {
+          showResult(d.result);
+        } else {
+          alert(d.error || 'Optimization error');
+        }
+        currentJob = null;
+      }
+    })
+    .catch(() => {});
+}
 
 // prevent form submission when pressing Enter
 form.addEventListener('submit', e => e.preventDefault());
@@ -115,32 +144,34 @@ runBtn.addEventListener('click', e => {
   formData.append('constraints', JSON.stringify(constr));
   runBtn.disabled = true;
   resultDiv.classList.add('d-none');
+  progressDiv.textContent = '';
   spinner.classList.remove('d-none');
   fetch(form.action, {
     method: 'POST',
     body: formData,
     credentials: 'same-origin'
   })
-    .then(r =>
-      r
-        .json()
-        .then(data => {
-          if (!r.ok || data.error) {
-            throw new Error(data.error || r.status);
-          }
-          return data;
-        })
-    )
-    .then(showResult)
+    .then(r => r.json())
+    .then(data => {
+      if (!data.job_id) {
+        throw new Error(data.error || 'Invalid response');
+      }
+      currentJob = data.job_id;
+      progressTimer = setInterval(fetchProgress, 2000);
+      fetchProgress();
+    })
     .catch(err => {
       console.error('Optimization error', err);
-      alert(err.message || 'Грешка при оптимизацията.');
-
-    })
-    .finally(() => {
+      alert(err.message || 'Optimization error.');
       spinner.classList.add('d-none');
       runBtn.disabled = false;
+      if (progressTimer) {
+        clearInterval(progressTimer);
+        progressTimer = null;
+        fetchProgress();
+      }
     });
+  // cleanup handled in fetchProgress when job finishes
 });
 
 function showResult(res) {
@@ -170,3 +201,4 @@ function showResult(res) {
     console.error('Chart.js not loaded');
   }
 }
+

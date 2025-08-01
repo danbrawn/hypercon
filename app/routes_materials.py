@@ -44,7 +44,7 @@ def page_materials():
 def import_excel():
     f = request.files.get("file")
     if not f:
-        flash("Не е избран файл.", "danger")
+        flash("No file selected.", "danger")
         return redirect(url_for("materials.page_materials"))
 
     try:
@@ -53,7 +53,7 @@ def import_excel():
         # Treat empty cells or whitespace as missing values
         df = df.replace(r'^\s*$', pd.NA, regex=True)
     except Exception as e:
-        flash(f"Грешка при четене: {e}", "danger")
+        flash(f"Read error: {e}", "danger")
         return redirect(url_for("materials.page_materials"))
 
     tbl = get_materials_table()
@@ -119,5 +119,5 @@ def import_excel():
             db.session.execute(tbl.insert().values(**data))
 
     db.session.commit()
-    flash("Импортирано успешно.", "success")
+    flash("Import successful.", "success")
     return redirect(url_for("materials.page_materials"))

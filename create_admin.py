@@ -4,11 +4,11 @@ from app.models import User
 app = create_app()
 with app.app_context():
     if User.query.filter_by(username="admin").first():
-        print("Admin вече съществува.")
+        print("Admin already exists.")
     else:
         admin = User(username="admin", role="admin")
         admin.set_password("admin")
         db.session.add(admin)
         db.session.commit()
-        print("Admin създаден успешно.")
+        print("Admin created successfully.")
 

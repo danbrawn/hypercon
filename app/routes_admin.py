@@ -16,7 +16,7 @@ def manage_clients():
         schema = request.form["schema_name"].strip()
         db.session.add(Client(name=name, schema_name=schema))
         db.session.commit()
-        flash(f"Клиент {name} създаден.", "success")
+        flash(f"Client {name} created.", "success")
         return redirect(url_for("admin.manage_clients"))
 
     clients = Client.query.all()
@@ -36,7 +36,7 @@ def manage_users():
         user.set_password(pw)
         db.session.add(user)
         db.session.commit()
-        flash(f"Потребител {uname} създаден.", "success")
+        flash(f"User {uname} created.", "success")
         return redirect(url_for("admin.manage_users"))
 
     users   = User.query.all()
