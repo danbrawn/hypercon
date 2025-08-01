@@ -1,11 +1,11 @@
 {% extends "base.html" %}
 {% block content %}
   <div class="mb-3">
-    <strong>Схема:</strong> {{ schema }}<br>
-    <strong>Таблица:</strong> {{ table_name }}
+    <strong>Schema:</strong> {{ schema }}<br>
+    <strong>Table:</strong> {{ table_name }}
   </div>
 
-  <h3>Материали</h3>
+  <h3>Materials</h3>
 
   <form action="{{ url_for('materials.import_excel') }}"
         method="post"
@@ -13,7 +13,7 @@
         class="mb-3">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <input type="file" name="file" accept=".xlsx" required>
-    <button class="btn btn-secondary">Импорт от Excel</button>
+    <button class="btn btn-secondary">Import from Excel</button>
   </form>
 
   <table class="table table-striped">
