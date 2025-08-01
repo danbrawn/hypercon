@@ -1,11 +1,11 @@
 {% extends "base.html" %}
 {% block content %}
   <div class="mb-3">
-    <strong>Схема:</strong> {{ schema }}<br>
-    <strong>Таблица:</strong> {{ table_name }}
+    <strong>Schema:</strong> {{ schema }}<br>
+    <strong>Table:</strong> {{ table_name }}
   </div>
 
-  <h3>Материали</h3>
+  <h3>Materials</h3>
 
   <form action="{{ url_for('materials.import_excel') }}"
         method="post"
@@ -13,25 +13,39 @@
         class="mb-3">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <input type="file" name="file" accept=".xlsx" required>
-    <button class="btn btn-secondary">Импорт от Excel</button>
+    <button class="btn btn-secondary">Import from Excel</button>
   </form>
 
-  <table class="table table-striped">
-    <thead>
-      <tr>
-        {% for col in columns %}
-          <th>{{ col }}</th>
-        {% endfor %}
-      </tr>
-    </thead>
-    <tbody>
-      {% for row in rows %}
+  <form id="rows-form" action="{{ url_for('materials.delete_rows') }}" method="post">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="mb-2">
+      <button type="button" id="select-all-rows" class="btn btn-sm btn-secondary">Select All</button>
+      <button type="button" id="unselect-all-rows" class="btn btn-sm btn-secondary">Unselect All</button>
+      <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('Delete selected rows?')">Delete rows</button>
+    </div>
+    <table class="table table-striped" id="materials-table">
+      <thead>
         <tr>
+          <th>Select</th>
           {% for col in columns %}
-            <td>{{ row[col] }}</td>
+            <th>{{ col }}</th>
           {% endfor %}
         </tr>
-      {% endfor %}
-    </tbody>
-  </table>
+      </thead>
+      <tbody>
+        {% for row in rows %}
+          <tr>
+            <td><input type="checkbox" name="row_id" value="{{ row['id'] }}" class="row-chk"></td>
+            {% for col in columns %}
+              <td>{{ row[col] }}</td>
+            {% endfor %}
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </form>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='materials.js') }}"></script>
 {% endblock %}

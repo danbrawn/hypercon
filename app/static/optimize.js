@@ -17,7 +17,7 @@ function fetchProgress() {
     .then(d => {
       if (d.total > 0) {
         const pct = ((d.done / d.total) * 100).toFixed(2);
-        progressDiv.textContent = `Прогрес: ${pct}% (${d.done}/${d.total})`;
+        progressDiv.textContent = `Progress: ${pct}% (${d.done}/${d.total})`;
       }
       if (d.result || d.error) {
         clearInterval(progressTimer);
@@ -27,7 +27,7 @@ function fetchProgress() {
         if (d.result) {
           showResult(d.result);
         } else {
-          alert(d.error || 'Грешка при оптимизацията');
+          alert(d.error || 'Optimization error');
         }
         currentJob = null;
       }
@@ -83,6 +83,23 @@ function updateConstraintOptions() {
 document.querySelectorAll('.use-chk').forEach(chk =>
   chk.addEventListener('change', updateConstraintOptions)
 );
+
+const selectAllBtn = document.getElementById('select-all');
+const unselectAllBtn = document.getElementById('unselect-all');
+if (selectAllBtn && unselectAllBtn) {
+  selectAllBtn.addEventListener('click', () => {
+    document.querySelectorAll('.use-chk').forEach(chk => {
+      chk.checked = true;
+    });
+    updateConstraintOptions();
+  });
+  unselectAllBtn.addEventListener('click', () => {
+    document.querySelectorAll('.use-chk').forEach(chk => {
+      chk.checked = false;
+    });
+    updateConstraintOptions();
+  });
+}
 
 // initial setup
 updateConstraintOptions();
@@ -154,7 +171,7 @@ runBtn.addEventListener('click', e => {
     .then(r => r.json())
     .then(data => {
       if (!data.job_id) {
-        throw new Error(data.error || 'Невалиден отговор');
+        throw new Error(data.error || 'Invalid response');
       }
       currentJob = data.job_id;
       progressTimer = setInterval(fetchProgress, 2000);
@@ -162,7 +179,7 @@ runBtn.addEventListener('click', e => {
     })
     .catch(err => {
       console.error('Optimization error', err);
-      alert(err.message || 'Грешка при оптимизацията.');
+      alert(err.message || 'Optimization error.');
       spinner.classList.add('d-none');
       runBtn.disabled = false;
       if (progressTimer) {
