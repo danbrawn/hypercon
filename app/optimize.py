@@ -75,9 +75,9 @@ def load_data(schema: Optional[str] = None):
     rows = db.session.execute(stmt).mappings().all()
 
     if not rows:
-        raise ValueError('Не са намерени материали за оптимизиране')
+        raise ValueError('No materials found for optimization')
     if not numeric_cols:
-        raise ValueError('Няма подходящи числови колони')
+        raise ValueError('No suitable numeric columns')
 
     # build arrays
     values = np.array([[row[c] for c in numeric_cols] for row in rows], dtype=float)
@@ -293,7 +293,7 @@ def find_best_mix(names: np.ndarray,
                 break
     sys.stdout.write("\n")
     if not results:
-        raise RuntimeError('Няма успешно решение за оптимизация')
+        raise RuntimeError('No successful solution for optimization')
     if best is None:
         best = min(results, key=lambda t: t[0])
     return best

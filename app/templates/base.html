@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="bg">
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -17,13 +17,13 @@
       <ul class="navbar-nav ms-auto">
         {% if current_user.is_authenticated %}
           {% if current_user.role=='admin' %}
-            <li class="nav-item"><a class="nav-link" href="{{ url_for('admin.manage_clients') }}">Управ. Клиенти</a></li>
-            <li class="nav-item"><a class="nav-link" href="{{ url_for('admin.manage_users') }}">Управ. Потребители</a></li>
+            <li class="nav-item"><a class="nav-link" href="{{ url_for('admin.manage_clients') }}">Manage Clients</a></li>
+            <li class="nav-item"><a class="nav-link" href="{{ url_for('admin.manage_users') }}">Manage Users</a></li>
           {% endif %}
-          <li class="nav-item"><a class="nav-link" href="{{ url_for('optimize_bp.page') }}">Оптимизация</a></li>
-          <li class="nav-item"><a class="nav-link" href="{{ url_for('auth.logout') }}">Изход</a></li>
+          <li class="nav-item"><a class="nav-link" href="{{ url_for('optimize_bp.page') }}">Optimize</a></li>
+          <li class="nav-item"><a class="nav-link" href="{{ url_for('auth.logout') }}">Logout</a></li>
         {% else %}
-          <li class="nav-item"><a class="nav-link" href="{{ url_for('auth.login') }}">Вход</a></li>
+          <li class="nav-item"><a class="nav-link" href="{{ url_for('auth.login') }}">Login</a></li>
         {% endif %}
       </ul>
     </div>
