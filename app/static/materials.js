@@ -1,10 +1,11 @@
-const selAll = document.getElementById('select-all-rows');
-const unselAll = document.getElementById('unselect-all-rows');
-if (selAll && unselAll) {
-  selAll.addEventListener('click', () => {
-    document.querySelectorAll('.row-chk').forEach(chk => { chk.checked = true; });
+const selectAllBtn = document.getElementById('mat-select-all');
+const unselectAllBtn = document.getElementById('mat-unselect-all');
+
+if (selectAllBtn && unselectAllBtn) {
+  selectAllBtn.addEventListener('click', () => {
+    document.querySelectorAll('.row-chk').forEach(c => (c.checked = true));
   });
-  unselAll.addEventListener('click', () => {
-    document.querySelectorAll('.row-chk').forEach(chk => { chk.checked = false; });
+  unselectAllBtn.addEventListener('click', () => {
+    document.querySelectorAll('.row-chk').forEach(c => (c.checked = false));
   });
 }

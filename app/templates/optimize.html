@@ -9,7 +9,6 @@
 
 <form id="opt-form" action="{{ url_for('optimize_bp.run') }}" method="post">
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-  <input type="hidden" name="schema" value="{{ schema }}">
 
   <div class="mb-2">
     <button type="button" id="select-all" class="btn btn-sm btn-secondary">Select All</button>
@@ -39,7 +38,7 @@
   <div class="mb-3">
     <h5>Constraints</h5>
     <table class="table table-sm" id="constraints-table">
-      <thead><tr><th>Material</th><th>Op</th><th>Value</th></tr></thead>
+      <thead><tr><th>Material</th><th>Operator</th><th>Value</th></tr></thead>
       <tbody id="constraints-body"></tbody>
     </table>
     <button type="button" id="add-constr" class="btn btn-secondary">Add Constraint</button>
@@ -48,10 +47,9 @@
   <button id="run" type="button" class="btn btn-primary">Run</button>
   <div id="spinner" class="d-none mt-2">
     <div class="spinner-border" role="status">
-      <span class="visually-hidden">Waiting...</span>
+      <span class="visually-hidden">Working...</span>
     </div>
   </div>
-  <div id="progress" data-url="{{ url_for('optimize_bp.progress', job_id='') }}" class="mt-2"></div>
 </form>
 
 <div id="result" class="d-none">
@@ -67,7 +65,9 @@
 </div>
 
 <script id="materials-data" type="application/json">
-  {{ materials|tojson }}
+  [
+  {% for r in rows %}{"id": {{ r['id'] }}, "name": "{{ r['material_name'] }}"}{% if not loop.last %},{% endif %}{% endfor %}
+  ]
 </script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script src="{{ url_for('static', filename='optimize.js') }}"></script>

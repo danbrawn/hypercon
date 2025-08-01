@@ -53,7 +53,7 @@ def import_excel():
         # Treat empty cells or whitespace as missing values
         df = df.replace(r'^\s*$', pd.NA, regex=True)
     except Exception as e:
-        flash(f"Read error: {e}", "danger")
+        flash(f"Error reading file: {e}", "danger")
         return redirect(url_for("materials.page_materials"))
 
     tbl = get_materials_table()
@@ -126,12 +126,10 @@ def import_excel():
 @bp.route("/materials/delete", methods=["POST"])
 @login_required
 def delete_rows():
-    ids = request.form.getlist("row_id")
+    ids = request.form.getlist("ids")
     if ids:
         tbl = get_materials_table()
         db.session.execute(tbl.delete().where(tbl.c.id.in_(map(int, ids))))
         db.session.commit()
-        flash("Rows deleted.", "success")
-    else:
-        flash("No rows selected.", "warning")
+        flash(f"Deleted {len(ids)} rows.", "success")
     return redirect(url_for("materials.page_materials"))

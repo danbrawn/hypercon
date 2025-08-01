@@ -16,17 +16,17 @@
     <button class="btn btn-secondary">Import from Excel</button>
   </form>
 
-  <form id="rows-form" action="{{ url_for('materials.delete_rows') }}" method="post">
+  <form id="del-form" action="{{ url_for('materials.delete_rows') }}" method="post">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <div class="mb-2">
-      <button type="button" id="select-all-rows" class="btn btn-sm btn-secondary">Select All</button>
-      <button type="button" id="unselect-all-rows" class="btn btn-sm btn-secondary">Unselect All</button>
-      <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('Delete selected rows?')">Delete rows</button>
+      <button type="button" id="mat-select-all" class="btn btn-sm btn-secondary">Select All</button>
+      <button type="button" id="mat-unselect-all" class="btn btn-sm btn-secondary">Unselect All</button>
+      <button type="submit" id="delete-rows" class="btn btn-sm btn-danger">Delete rows</button>
     </div>
     <table class="table table-striped" id="materials-table">
       <thead>
         <tr>
-          <th>Select</th>
+          <th></th>
           {% for col in columns %}
             <th>{{ col }}</th>
           {% endfor %}
@@ -35,7 +35,7 @@
       <tbody>
         {% for row in rows %}
           <tr>
-            <td><input type="checkbox" name="row_id" value="{{ row['id'] }}" class="row-chk"></td>
+            <td><input type="checkbox" name="ids" value="{{ row['id'] }}" class="row-chk"></td>
             {% for col in columns %}
               <td>{{ row[col] }}</td>
             {% endfor %}
