@@ -84,23 +84,6 @@ document.querySelectorAll('.use-chk').forEach(chk =>
   chk.addEventListener('change', updateConstraintOptions)
 );
 
-const selectAllBtn = document.getElementById('select-all');
-const unselectAllBtn = document.getElementById('unselect-all');
-if (selectAllBtn && unselectAllBtn) {
-  selectAllBtn.addEventListener('click', () => {
-    document.querySelectorAll('.use-chk').forEach(chk => {
-      chk.checked = true;
-    });
-    updateConstraintOptions();
-  });
-  unselectAllBtn.addEventListener('click', () => {
-    document.querySelectorAll('.use-chk').forEach(chk => {
-      chk.checked = false;
-    });
-    updateConstraintOptions();
-  });
-}
-
 // initial setup
 updateConstraintOptions();
 
