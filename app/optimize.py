@@ -1,7 +1,6 @@
 """Core optimization helpers (updated to use database-driven workflow)."""
 
 import itertools
-import sys
 import numpy as np
 import pandas as pd
 
@@ -11,7 +10,6 @@ from flask_login import current_user
 from typing import Optional
 import re
 import itertools
-import sys
 
 try:  # SciPy is optional during development
     from scipy.optimize import minimize
@@ -26,16 +24,9 @@ POWER = 0.217643428858232
 MAX_COMPONENTS = 7  # maximum number of materials considered in a mix
 RESTARTS = 10       # number of random restarts for SLSQP
 
-# progress tracking shared by optimization routines
-_PROGRESS = {"total": 0, "done": 0}
-
-def get_progress() -> dict:
-    """Return current optimization progress."""
-    return dict(_PROGRESS)
 
 
 # Utility to parse numeric column names
-import re
 NUM_RE = re.compile(r'^\d+(?:\.\d+)?')
 
 def _parse_numeric(val: str) -> Optional[float]:
@@ -46,14 +37,6 @@ def _parse_numeric(val: str) -> Optional[float]:
 
 def _is_number(val: str) -> bool:
     return _parse_numeric(val) is not None
-
-
-def _is_valid_prop(col: str, limit: float) -> bool:
-    num = _parse_numeric(col)
-    return num is not None and num <= limit
-
-def _get_materials_table(schema: Optional[str] = None):
-    """Връща таблицата materials_grit за указаната или текущата схема."""
 
 
 def _is_valid_prop(col: str, limit: float) -> bool:
@@ -264,16 +247,16 @@ def optimize_with_restarts(
     return best
 
 
-def find_best_mix(names: np.ndarray,
-                  values: np.ndarray,
-                  target: np.ndarray,
-                  props: list[str],
-                  max_combo_num: int,
-                  mse_threshold: float | None = None,
-                  n_restarts: int = RESTARTS,
-                  constraints: list[tuple[int, str, float]] | None = None,
-                  progress_cb=None,
-                  ):
+def find_best_mix(
+    names: np.ndarray,
+    values: np.ndarray,
+    target: np.ndarray,
+    props: list[str],
+    max_combo_num: int,
+    mse_threshold: float | None = None,
+    n_restarts: int = RESTARTS,
+    constraints: list[tuple[int, str, float]] | None = None,
+):
     """Evaluate all material combinations and return the best result."""
 
     n = values.shape[0]
@@ -281,20 +264,10 @@ def find_best_mix(names: np.ndarray,
     for r in range(1, min(max_combo_num, n) + 1):
         combos.extend(itertools.combinations(range(n), r))
     total = len(combos)
-    if progress_cb:
-        progress_cb(0, total)
 
     best = None
     results: list[tuple[float, tuple[int, ...], np.ndarray]] = []
     for i, combo in enumerate(combos, 1):
-        pct = i / total * 100
-        print(
-            f"Progress: {pct:6.2f}% ({i}/{total})",
-            end="\r",
-            flush=True,
-        )
-        if progress_cb:
-            progress_cb(i, total)
         # Skip combos that don't contain materials from equality/">" constraints
         if constraints:
             required = {
@@ -318,9 +291,9 @@ def find_best_mix(names: np.ndarray,
             )
             if mse_threshold is not None and mse_val <= mse_threshold:
                 best = res
-                sys.stdout.write("Threshold reached, stopping early.\n")
+                print("Threshold reached, stopping early.")
                 break
-    sys.stdout.write("\n")
+    print()
     if not results:
         return None
     if best is None:
@@ -334,17 +307,9 @@ def run_full_optimization(
     mse_threshold: float | None = 0.0004,
     material_ids: Optional[list[int]] = None,
     constraints: Optional[list[tuple[int, str, float]]] = None,
-    progress: Optional[dict] = None,
     user_id: Optional[int] = None,
 ):
     """Load materials and search for the optimal mix."""
-
-    # choose progress dict
-    prog = progress if progress is not None else _PROGRESS
-
-    # reset progress
-    prog["total"] = 0
-    prog["done"] = 0
 
     ids, names, values, target, prop_cols = load_recipe_data(
         property_limit, schema, material_ids, user_id
@@ -358,10 +323,6 @@ def run_full_optimization(
             if mid in id_to_idx:
                 constr_idx.append((id_to_idx[mid], op, float(val)))
 
-    def progress_cb(done: int, total: int):
-        prog["total"] = int(total)
-        prog["done"] = int(done)
-
     best = find_best_mix(
         names,
         values,
@@ -371,10 +332,7 @@ def run_full_optimization(
         mse_threshold,
         RESTARTS,
         constr_idx,
-        progress_cb,
     )
-
-    prog["done"] = prog.get("total", 0)
 
     if not best:
         return None
