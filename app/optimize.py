@@ -20,11 +20,18 @@ except Exception:  # pragma: no cover
 
 from . import db
 
-# Normalization exponent for profiles
-# Derived from provided Excel formulas
+# Степента за нормализация на профилите
+# Изведена от предоставените Excel формули
 POWER = 0.217643428858232
 MAX_COMPONENTS = 7  # maximum number of materials considered in a mix
 RESTARTS = 10       # number of random restarts for SLSQP
+
+# progress tracking shared by optimization routines
+_PROGRESS = {"total": 0, "done": 0}
+
+def get_progress() -> dict:
+    """Return current optimization progress."""
+    return dict(_PROGRESS)
 
 
 # Utility to parse numeric column names
@@ -46,7 +53,7 @@ def _is_valid_prop(col: str, limit: float) -> bool:
     return num is not None and num <= limit
 
 def _get_materials_table(schema: Optional[str] = None):
-    """Return the materials_grit table for the given or current schema."""
+    """Връща таблицата materials_grit за указаната или текущата схема."""
 
 
 def _is_valid_prop(col: str, limit: float) -> bool:
@@ -63,7 +70,7 @@ def _get_materials_table(schema: Optional[str] = None):
     meta = MetaData(schema=sch)
     return Table('materials_grit', meta, autoload_with=db.engine)
 
-def load_data(schema: Optional[str] = None):
+def load_data(schema: Optional[str] = None, user_id: Optional[int] = None):
     tbl = _get_materials_table(schema)
     # pick numeric columns
     numeric_cols = [c.key for c in tbl.columns if _is_number(c.key)]
@@ -71,7 +78,10 @@ def load_data(schema: Optional[str] = None):
 
     stmt = select(tbl)
     if 'user_id' in tbl.c:
-        stmt = stmt.where(tbl.c.user_id == current_user.id)
+        if user_id is not None:
+            stmt = stmt.where(tbl.c.user_id == user_id)
+        else:
+            stmt = stmt.where(tbl.c.user_id == current_user.id)
     rows = db.session.execute(stmt).mappings().all()
 
     if not rows:
@@ -92,6 +102,7 @@ def load_recipe_data(
     property_limit: float,
     schema: Optional[str] = None,
     allowed_ids: Optional[list[int]] = None,
+    user_id: Optional[int] = None,
 ):
     """Load materials and numeric columns with optional limit and filtering."""
 
@@ -99,7 +110,10 @@ def load_recipe_data(
 
     stmt = select(tbl)
     if 'user_id' in tbl.c:
-        stmt = stmt.where(tbl.c.user_id == current_user.id)
+        if user_id is not None:
+            stmt = stmt.where(tbl.c.user_id == user_id)
+        else:
+            stmt = stmt.where(tbl.c.user_id == current_user.id)
     if allowed_ids:
         stmt = stmt.where(tbl.c.id.in_(allowed_ids))
 
@@ -251,6 +265,7 @@ def find_best_mix(names: np.ndarray,
                   mse_threshold: float | None = None,
                   n_restarts: int = RESTARTS,
                   constraints: list[tuple[int, str, float]] | None = None,
+                  progress_cb=None,
                   ):
     """Evaluate all material combinations and return the best result."""
 
@@ -259,13 +274,20 @@ def find_best_mix(names: np.ndarray,
     for r in range(1, min(max_combo_num, n) + 1):
         combos.extend(itertools.combinations(range(n), r))
     total = len(combos)
+    if progress_cb:
+        progress_cb(0, total)
 
     best = None
     results: list[tuple[float, tuple[int, ...], np.ndarray]] = []
     for i, combo in enumerate(combos, 1):
         pct = i / total * 100
-        sys.stdout.write(f"\rProgress: {pct:6.2f}% ({i}/{total})")
-        sys.stdout.flush()
+        print(
+            f"Progress: {pct:6.2f}% ({i}/{total})",
+            end="\r",
+            flush=True,
+        )
+        if progress_cb:
+            progress_cb(i, total)
         # Skip combos that don't contain materials from equality/">" constraints
         if constraints:
             required = {
@@ -293,7 +315,7 @@ def find_best_mix(names: np.ndarray,
                 break
     sys.stdout.write("\n")
     if not results:
-        raise RuntimeError('No successful solution for optimization')
+        return None
     if best is None:
         best = min(results, key=lambda t: t[0])
     return best
@@ -305,11 +327,20 @@ def run_full_optimization(
     mse_threshold: float | None = 0.0004,
     material_ids: Optional[list[int]] = None,
     constraints: Optional[list[tuple[int, str, float]]] = None,
+    progress: Optional[dict] = None,
+    user_id: Optional[int] = None,
 ):
     """Load materials and search for the optimal mix."""
 
+    # choose progress dict
+    prog = progress if progress is not None else _PROGRESS
+
+    # reset progress
+    prog["total"] = 0
+    prog["done"] = 0
+
     ids, names, values, target, prop_cols = load_recipe_data(
-        property_limit, schema, material_ids
+        property_limit, schema, material_ids, user_id
     )
 
     # Map DB id -> index in arrays
@@ -320,6 +351,10 @@ def run_full_optimization(
             if mid in id_to_idx:
                 constr_idx.append((id_to_idx[mid], op, float(val)))
 
+    def progress_cb(done: int, total: int):
+        prog["total"] = int(total)
+        prog["done"] = int(done)
+
     best = find_best_mix(
         names,
         values,
@@ -329,23 +364,29 @@ def run_full_optimization(
         mse_threshold,
         RESTARTS,
         constr_idx,
+        progress_cb,
     )
+
+    prog["done"] = prog.get("total", 0)
 
     if not best:
         return None
     # unpack the best result
     mse, combo, weights = best
-    # compute the mixed profile
-    # Use only the columns corresponding to the chosen materials for mixing
+    # ensure plain Python types for JSON serialization
+    mse = float(mse)
+    weights = np.asarray(weights, dtype=float)
+
+    # compute the mixed profile using the chosen materials
     mixed = weights.dot(values[list(combo)])
 
     return {
-        # Convert NumPy integer IDs to plain Python ints for JSON sdasderialization
+        # Convert NumPy integer IDs to plain Python ints for JSON serialization
         'material_ids': [int(ids[i]) for i in combo],
-        'material_names': [names[i] for i in combo],
+        'material_names': [str(names[i]) for i in combo],
         'weights':      weights.tolist(),
         'best_mse':     mse,
-        'prop_columns': prop_cols,
+        'prop_columns': list(map(str, prop_cols)),
         'target_profile': target.tolist(),
         'mixed_profile':  mixed.tolist(),
     }
