@@ -268,6 +268,10 @@ def find_best_mix(
     best = None
     results: list[tuple[float, tuple[int, ...], np.ndarray]] = []
     for i, combo in enumerate(combos, 1):
+        # Provide simple console progress so operators can observe search evolution
+        print(f"Progress: {i}/{total} combinations ({(i/total)*100:.1f}% done)")
+
+
         # Skip combos that don't contain materials from equality/">" constraints
         if constraints:
             required = {
