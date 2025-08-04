@@ -145,13 +145,9 @@ runBtn.addEventListener('click', e => {
         })
     )
     .then(data => {
-      if (data.job_id) {
-        pollProgress(data.job_id);
-      } else {
-        showResult(data);
-        spinner.classList.add('d-none');
-        runBtn.disabled = false;
-      }
+      showResult(data);
+      spinner.classList.add('d-none');
+      runBtn.disabled = false;
     })
     .catch(err => {
       console.error('Optimization error', err);
@@ -160,33 +156,6 @@ runBtn.addEventListener('click', e => {
       runBtn.disabled = false;
     });
 });
-
-function pollProgress(jobId) {
-  fetch(`/optimize/progress?job_id=${jobId}`, { credentials: 'same-origin' })
-    .then(r => r.json())
-    .then(data => {
-      if (data.error) {
-        throw new Error(data.error);
-      }
-      if (data.total === 0 && data.done === 0) {
-        setTimeout(() => pollProgress(jobId), 500);
-        return;
-      }
-      if (data.done < data.total || !data.result) {
-        setTimeout(() => pollProgress(jobId), 500);
-        return;
-      }
-      showResult(data.result);
-      spinner.classList.add('d-none');
-      runBtn.disabled = false;
-    })
-    .catch(err => {
-      console.error('Optimization error', err);
-      alert(err.message || 'Optimization error.');
-      spinner.classList.add('d-none');
-      runBtn.disabled = false;
-    });
-}
 
 function showResult(res) {
   // some backends may wrap or stringify the payload inside a `result` field
