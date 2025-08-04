@@ -19,3 +19,4 @@ config.py reads these values and forms DB_URI, MATERIALS_TABLE and MATERIALS_SCH
 models.py defines Material = Table(...) with reflection (autoload_with=db.engine).
 
 routes_materials.py uses Core-style Material.select(), .delete() and .insert() without touching columns in the code.
+
