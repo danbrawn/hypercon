@@ -342,6 +342,7 @@ def run_full_optimization(
     return {
         # Convert NumPy integer IDs to plain Python ints for JSON sdasderialization
         'material_ids': [int(ids[i]) for i in combo],
+        'material_names': [names[i] for i in combo],
         'weights':      weights.tolist(),
         'best_mse':     mse,
         'prop_columns': prop_cols,
