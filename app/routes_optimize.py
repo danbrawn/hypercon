@@ -1,10 +1,15 @@
 from flask import Blueprint, render_template, jsonify, request
 from flask_login import login_required
+from threading import Thread
+from uuid import uuid4
 
 from . import db
 from .optimize import run_full_optimization, _get_materials_table
 
 bp = Blueprint('optimize_bp', __name__)
+
+# simple in-memory job store
+_jobs: dict[str, dict] = {}
 
 @bp.route('', methods=['GET'])
 @login_required
@@ -39,13 +44,38 @@ def run():
     if not material_ids:
         return jsonify(error="No materials selected"), 400
 
-    try:
-        result = run_full_optimization(
-            material_ids=material_ids,
-            constraints=[(int(c['id']), c['op'], float(c['val'])) for c in constr] if constr else None,
-        )
-    except Exception as exc:
-        return jsonify(error=str(exc)), 400
-    if result is None:
-        return jsonify(error='Optimization failed'), 400
-    return jsonify(result)
+    job_id = uuid4().hex
+    # start with a dummy total > 0 so the UI knows the job is in progress
+    progress = {"total": 1, "done": 0}
+    _jobs[job_id] = {"progress": progress, "result": None, "error": None}
+
+    def worker():
+        try:
+            result = run_full_optimization(
+                material_ids=material_ids,
+                constraints=[(int(c['id']), c['op'], float(c['val'])) for c in constr] if constr else None,
+            )
+            _jobs[job_id]["result"] = result
+        except Exception as exc:
+            _jobs[job_id]["error"] = str(exc)
+        finally:
+            progress["done"] = progress["total"]
+
+    Thread(target=worker, daemon=True).start()
+    return jsonify(job_id=job_id)
+
+
+@bp.route('/progress')
+@login_required
+def progress():
+    job_id = request.args.get('job_id')
+    job = _jobs.get(job_id)
+    if not job:
+        return jsonify(error="Unknown job"), 404
+    prog = job["progress"]
+    data = {"total": prog["total"], "done": prog["done"]}
+    if job["error"]:
+        data["error"] = job["error"]
+    if job["result"] is not None:
+        data["result"] = job["result"]
+    return jsonify(data)
