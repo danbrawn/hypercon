@@ -2,7 +2,8 @@ from flask import Blueprint, request, render_template, flash, redirect, url_for,
 import pandas as pd
 from sqlalchemy import MetaData, Table, select, text
 from . import db
-from flask_login import current_user,login_required
+from flask_login import current_user, login_required
+import re
 
 bp = Blueprint("materials", __name__)
 
@@ -55,6 +56,26 @@ def import_excel():
     except Exception as e:
         flash(f"Error reading file: {e}", "danger")
         return redirect(url_for("materials.page_materials"))
+
+    # Validate numeric columns
+    for col in df.columns:
+        if col.isdigit():
+            df[col] = pd.to_numeric(df[col], errors="coerce")
+            if df[col].isnull().any():
+                flash(f"Column {col} must contain only numeric values.", "danger")
+                return redirect(url_for("materials.page_materials"))
+
+    # Validate material names if present
+    if "material_name" in df.columns:
+        valid = df["material_name"].apply(
+            lambda x: isinstance(x, str) and re.fullmatch(r"[A-Za-z0-9 _-]+", x)
+        )
+        if not valid.all():
+            flash(
+                "Material names must use only Latin letters, numbers, spaces, hyphens, or underscores.",
+                "danger",
+            )
+            return redirect(url_for("materials.page_materials"))
 
     tbl = get_materials_table()
     existing = set(tbl.columns.keys())
