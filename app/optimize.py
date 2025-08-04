@@ -334,7 +334,7 @@ def run_full_optimization(
     mse_threshold: float | None = 0.0004,
     material_ids: Optional[list[int]] = None,
     constraints: Optional[list[tuple[int, str, float]]] = None,
-
+    progress: Optional[dict] = None,
     user_id: Optional[int] = None,
 ):
     """Load materials and search for the optimal mix."""
