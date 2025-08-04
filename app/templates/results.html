@@ -1,0 +1,25 @@
+{% extends 'base.html' %}
+{% block content %}
+<h1>Results</h1>
+<table class="table table-striped">
+  <thead>
+    <tr><th>Date &amp; Time</th><th>MSE</th><th>Materials</th></tr>
+  </thead>
+  <tbody>
+  {% for r in results %}
+    <tr data-bs-toggle="collapse" data-bs-target="#res{{ r.id }}" style="cursor:pointer;">
+      <td>{{ r.dateref }}</td>
+      <td>{{ '%.6f'|format(r.mse) }}</td>
+      <td>{{ r.names }}</td>
+    </tr>
+    <tr id="res{{ r.id }}" class="collapse">
+      <td colspan="3">
+        {% for name, perc in r.materials.items() %}
+          <div>{{ name }}: {{ '%.2f'|format(perc) }}%</div>
+        {% endfor %}
+      </td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endblock %}
