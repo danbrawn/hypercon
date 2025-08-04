@@ -144,65 +144,19 @@ runBtn.addEventListener('click', e => {
           return data;
         })
     )
-    .then(data => {
-      if (data.job_id) {
-        pollProgress(data.job_id);
-      } else {
-        showResult(data);
-        spinner.classList.add('d-none');
-        runBtn.disabled = false;
-      }
-    })
+    .then(showResult)
     .catch(err => {
       console.error('Optimization error', err);
       alert(err.message || 'Optimization error.');
+
+    })
+    .finally(() => {
       spinner.classList.add('d-none');
       runBtn.disabled = false;
     });
 });
 
-function pollProgress(jobId) {
-  fetch(`/optimize/progress?job_id=${jobId}`, { credentials: 'same-origin' })
-    .then(r => r.json())
-    .then(data => {
-      if (data.error) {
-        throw new Error(data.error);
-      }
-      if (data.total === 0 && data.done === 0) {
-        setTimeout(() => pollProgress(jobId), 500);
-        return;
-      }
-      if (data.done < data.total || !data.result) {
-        setTimeout(() => pollProgress(jobId), 500);
-        return;
-      }
-      showResult(data.result);
-      spinner.classList.add('d-none');
-      runBtn.disabled = false;
-    })
-    .catch(err => {
-      console.error('Optimization error', err);
-      alert(err.message || 'Optimization error.');
-      spinner.classList.add('d-none');
-      runBtn.disabled = false;
-    });
-}
-
 function showResult(res) {
-  // some backends may wrap or stringify the payload inside a `result` field
-  if (res && res.result !== undefined) {
-    if (typeof res.result === 'string') {
-      try {
-        res = JSON.parse(res.result);
-      } catch (e) {
-        console.error('Failed to parse result string', e, res.result);
-        alert('Invalid optimization response.');
-        return;
-      }
-    } else if (res.result && typeof res.result === 'object') {
-      res = res.result;
-    }
-  }
   if (!res || !Array.isArray(res.material_ids) || !Array.isArray(res.weights)) {
     alert(res && res.error ? res.error : 'Invalid optimization response.');
     console.error('Invalid response', res);
