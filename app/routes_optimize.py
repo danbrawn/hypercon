@@ -1,10 +1,13 @@
+
 from flask import Blueprint, render_template, jsonify, request, session, current_app
 from flask_login import login_required, current_user
+
 from threading import Thread
 from uuid import uuid4
 
 from . import db
 from .optimize import run_full_optimization, _get_materials_table
+from .models import ResultsRecipe
 
 bp = Blueprint('optimize_bp', __name__)
 
@@ -22,12 +25,14 @@ def page():
     nonnum = [c for c in cols if not c.isdigit()]
     num = sorted([c for c in cols if c.isdigit()], key=lambda x: int(x))
     columns = ['use'] + nonnum + num
+    materials = [{'id': r['id'], 'name': r['material_name']} for r in rows]
     return render_template(
         'optimize.html',
         schema=schema,
         table_name=table_name,
         columns=columns,
         rows=rows,
+        materials=materials,
     )
 
 @bp.route('/run', methods=['POST'])
@@ -37,6 +42,7 @@ def run():
 
     materials_raw = request.form.get('materials')
     constraints_raw = request.form.get('constraints')
+    schema = request.form.get('schema') or session.get('schema')
 
     material_ids = json.loads(materials_raw) if materials_raw else None
     constr = json.loads(constraints_raw) if constraints_raw else None
@@ -67,6 +73,7 @@ def run():
                 _jobs[job_id]["error"] = str(exc)
             finally:
                 progress["done"] = progress["total"]
+
 
     Thread(target=worker, daemon=True).start()
     return jsonify(job_id=job_id)
