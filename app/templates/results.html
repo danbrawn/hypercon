@@ -1,0 +1,31 @@
+{% extends 'base.html' %}
+{% block content %}
+<h1>Results</h1>
+<table class="table table-hover">
+  <thead>
+    <tr>
+      <th>Date & Time</th>
+      <th>MSE</th>
+      <th>Materials</th>
+    </tr>
+  </thead>
+  <tbody>
+  {% for r in results %}
+    <tr class="accordion-toggle" data-bs-toggle="collapse" data-bs-target="#res-{{ r.id }}">
+      <td>{{ r.dateref }}</td>
+      <td>{{ '%.6f'|format(r.mse) }}</td>
+      <td>{{ r.names }}</td>
+    </tr>
+    <tr id="res-{{ r.id }}" class="collapse">
+      <td colspan="3">
+        <ul class="mb-0">
+          {% for m in r.materials %}
+          <li>{{ m.name }}: {{ (m.percent * 100)|round(2) }}%</li>
+          {% endfor %}
+        </ul>
+      </td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endblock %}
