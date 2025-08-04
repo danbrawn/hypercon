@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, jsonify, request, current_app
+from flask import Blueprint, render_template, jsonify, request, current_app, session
 from flask_login import login_required, current_user
 from threading import Thread
 from uuid import uuid4
@@ -18,7 +18,7 @@ _jobs: dict[str, dict] = {}
 @login_required
 def page():
     tbl = _get_materials_table()
-    schema = tbl.schema or 'public'
+    schema = session.get('schema', 'main')
     table_name = tbl.name
     rows = db.session.execute(tbl.select()).mappings().all()
     cols = list(tbl.columns.keys())
@@ -42,7 +42,7 @@ def run():
 
     materials_raw = request.form.get('materials')
     constraints_raw = request.form.get('constraints')
-    schema = request.form.get('schema') or None
+    schema = request.form.get('schema') or session.get('schema')
 
     material_ids = json.loads(materials_raw) if materials_raw else None
     constr = json.loads(constraints_raw) if constraints_raw else None
