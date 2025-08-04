@@ -157,6 +157,20 @@ runBtn.addEventListener('click', e => {
 });
 
 function showResult(res) {
+  // some backends may wrap or stringify the payload inside a `result` field
+  if (res && res.result !== undefined) {
+    if (typeof res.result === 'string') {
+      try {
+        res = JSON.parse(res.result);
+      } catch (e) {
+        console.error('Failed to parse result string', e, res.result);
+        alert('Invalid optimization response.');
+        return;
+      }
+    } else if (res.result && typeof res.result === 'object') {
+      res = res.result;
+    }
+  }
   if (!res || !Array.isArray(res.material_ids) || !Array.isArray(res.weights)) {
     alert(res && res.error ? res.error : 'Invalid optimization response.');
     console.error('Invalid response', res);
