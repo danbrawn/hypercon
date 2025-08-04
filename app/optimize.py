@@ -285,7 +285,7 @@ def find_best_mix(names: np.ndarray,
                 [f"{names[j]}: {f*100:.2f}%" for j, f in zip(combo_idx, frac_vals)]
             )
             print(
-                f"\nMSE: {mse_val:.6f} | Комбо: [{', '.join(combo_names)}] | Пропорции: [{frac_str}]"
+                f"\nMSE: {mse_val:.6f} | Combo: [{', '.join(combo_names)}] | Proportions: [{frac_str}]"
             )
             if mse_threshold is not None and mse_val <= mse_threshold:
                 best = res
