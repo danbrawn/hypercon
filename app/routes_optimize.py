@@ -1,3 +1,4 @@
+
 from flask import Blueprint, render_template, jsonify, request
 from flask_login import login_required
 from threading import Thread
@@ -5,6 +6,7 @@ from uuid import uuid4
 
 from . import db
 from .optimize import run_full_optimization, _get_materials_table
+from .models import ResultsRecipe
 
 bp = Blueprint('optimize_bp', __name__)
 
@@ -15,19 +17,21 @@ _jobs: dict[str, dict] = {}
 @login_required
 def page():
     tbl = _get_materials_table()
-    schema = tbl.schema or 'public'
+    schema = session.get('schema', 'main')
     table_name = tbl.name
     rows = db.session.execute(tbl.select()).mappings().all()
     cols = list(tbl.columns.keys())
     nonnum = [c for c in cols if not c.isdigit()]
     num = sorted([c for c in cols if c.isdigit()], key=lambda x: int(x))
     columns = ['use'] + nonnum + num
+    materials = [{'id': r['id'], 'name': r['material_name']} for r in rows]
     return render_template(
         'optimize.html',
         schema=schema,
         table_name=table_name,
         columns=columns,
         rows=rows,
+        materials=materials,
     )
 
 @bp.route('/run', methods=['POST'])
@@ -37,6 +41,7 @@ def run():
 
     materials_raw = request.form.get('materials')
     constraints_raw = request.form.get('constraints')
+    schema = request.form.get('schema') or session.get('schema')
 
     material_ids = json.loads(materials_raw) if materials_raw else None
     constr = json.loads(constraints_raw) if constraints_raw else None
@@ -78,4 +83,5 @@ def progress():
         data["error"] = job["error"]
     if job["result"] is not None:
         data["result"] = job["result"]
+
     return jsonify(data)
