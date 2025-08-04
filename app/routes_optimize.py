@@ -3,8 +3,11 @@ from flask_login import login_required, current_user
 from threading import Thread
 from uuid import uuid4
 
+from sqlalchemy import text
+
 from . import db
 from .optimize import run_full_optimization, _get_materials_table
+from .models import ResultsRecipe
 
 bp = Blueprint('optimize_bp', __name__)
 
@@ -55,6 +58,10 @@ def run():
     def worker():
         with app.app_context():
             try:
+                if schema:
+                    db.session.execute(text(f"SET search_path TO {schema}, main"))
+                else:
+                    db.session.execute(text("SET search_path TO main"))
                 res = run_full_optimization(
                     schema=schema,
                     material_ids=material_ids,
@@ -62,8 +69,21 @@ def run():
                     progress=progress,
                     user_id=user_id,
                 )
+                if res is None:
+                    raise ValueError("Invalid optimization response")
+
+                materials = [
+                    {"name": res["material_names"][i], "percent": float(res["weights"][i])}
+                    for i in range(len(res["material_ids"]))
+                ]
+                db.session.add(
+                    ResultsRecipe(mse=float(res["best_mse"]), materials=materials)
+                )
+                db.session.commit()
+
                 _jobs[job_id]["result"] = res
             except Exception as exc:
+                db.session.rollback()
                 _jobs[job_id]["error"] = str(exc)
             finally:
                 progress["done"] = progress.get("total", 0)
