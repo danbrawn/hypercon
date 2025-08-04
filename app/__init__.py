@@ -107,11 +107,13 @@ def create_app():
     from .routes_admin     import bp as admin_bp
     from .routes_materials import bp as materials_bp
     from .routes_optimize  import bp as optimize_bp
+    from .routes_results   import bp as results_bp
 
     app.register_blueprint(auth_bp,      url_prefix="/auth")
     app.register_blueprint(admin_bp,     url_prefix="/admin")
     app.register_blueprint(materials_bp)             # no prefix
     app.register_blueprint(optimize_bp,   url_prefix="/optimize")
+    app.register_blueprint(results_bp,    url_prefix="/results")
 
     # ── Root and favicon ─────────────────────────────────────────────────────
     @app.route("/")
