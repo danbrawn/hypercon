@@ -1,6 +1,7 @@
 
-from flask import Blueprint, render_template, jsonify, request, session
-from flask_login import login_required
+from flask import Blueprint, render_template, jsonify, request, session, current_app
+from flask_login import login_required, current_user
+
 from threading import Thread
 from uuid import uuid4
 
@@ -54,17 +55,25 @@ def run():
     progress = {"total": 1, "done": 0}
     _jobs[job_id] = {"progress": progress, "result": None, "error": None}
 
+    schema = session.get('schema', 'main')
+    user_id = current_user.id
+    app = current_app._get_current_object()
+
     def worker():
-        try:
-            result = run_full_optimization(
-                material_ids=material_ids,
-                constraints=[(int(c['id']), c['op'], float(c['val'])) for c in constr] if constr else None,
-            )
-            _jobs[job_id]["result"] = result
-        except Exception as exc:
-            _jobs[job_id]["error"] = str(exc)
-        finally:
-            progress["done"] = progress["total"]
+        with app.app_context():
+            try:
+                result = run_full_optimization(
+                    schema=schema,
+                    material_ids=material_ids,
+                    constraints=[(int(c['id']), c['op'], float(c['val'])) for c in constr] if constr else None,
+                    user_id=user_id,
+                )
+                _jobs[job_id]["result"] = result
+            except Exception as exc:
+                _jobs[job_id]["error"] = str(exc)
+            finally:
+                progress["done"] = progress["total"]
+
 
     Thread(target=worker, daemon=True).start()
     return jsonify(job_id=job_id)

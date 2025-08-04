@@ -110,10 +110,12 @@ def load_recipe_data(
 
     stmt = select(tbl)
     if 'user_id' in tbl.c:
-        if user_id is not None:
-            stmt = stmt.where(tbl.c.user_id == user_id)
-        else:
-            stmt = stmt.where(tbl.c.user_id == current_user.id)
+        uid = user_id
+        if uid is None and has_request_context():
+            uid = getattr(current_user, 'id', None)
+        if uid is not None:
+            stmt = stmt.where(tbl.c.user_id == uid)
+
     if allowed_ids:
         stmt = stmt.where(tbl.c.id.in_(allowed_ids))
 
@@ -332,7 +334,7 @@ def run_full_optimization(
     mse_threshold: float | None = 0.0004,
     material_ids: Optional[list[int]] = None,
     constraints: Optional[list[tuple[int, str, float]]] = None,
-    progress: Optional[dict] = None,
+
     user_id: Optional[int] = None,
 ):
     """Load materials and search for the optimal mix."""
