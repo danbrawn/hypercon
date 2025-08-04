@@ -373,17 +373,20 @@ def run_full_optimization(
         return None
     # unpack the best result
     mse, combo, weights = best
-    # compute the mixed profile
-    # Use only the columns corresponding to the chosen materials for mixing
+    # ensure plain Python types for JSON serialization
+    mse = float(mse)
+    weights = np.asarray(weights, dtype=float)
+
+    # compute the mixed profile using the chosen materials
     mixed = weights.dot(values[list(combo)])
 
     return {
-        # Convert NumPy integer IDs to plain Python ints for JSON serialization  csscdcdcscsd
+        # Convert NumPy integer IDs to plain Python ints for JSON serialization
         'material_ids': [int(ids[i]) for i in combo],
-        'material_names': [names[i] for i in combo],
+        'material_names': [str(names[i]) for i in combo],
         'weights':      weights.tolist(),
         'best_mse':     mse,
-        'prop_columns': prop_cols,
+        'prop_columns': list(map(str, prop_cols)),
         'target_profile': target.tolist(),
         'mixed_profile':  mixed.tolist(),
     }

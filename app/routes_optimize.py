@@ -69,17 +69,22 @@ def run():
                     progress=progress,
                     user_id=user_id,
                 )
-                if res is not None:
-                    materials = [
-                        {"name": res["material_names"][i], "percent": res["weights"][i]}
-                        for i in range(len(res["material_ids"]))
-                    ]
-                    db.session.add(
-                        ResultsRecipe(mse=res["best_mse"], materials=materials)
-                    )
-                    db.session.commit()
+                if res is None:
+                    raise ValueError("Invalid optimization response")
+
+                materials = [
+                    {"name": res["material_names"][i], "percent": float(res["weights"][i])}
+                    for i in range(len(res["material_ids"]))
+                ]
+                db.session.add(
+                    ResultsRecipe(mse=float(res["best_mse"]), materials=materials)
+                )
+                db.session.commit()
+
+
                 _jobs[job_id]["result"] = res
             except Exception as exc:
+                db.session.rollback()
                 _jobs[job_id]["error"] = str(exc)
             finally:
                 progress["done"] = progress.get("total", 0)
