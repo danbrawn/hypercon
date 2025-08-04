@@ -36,6 +36,9 @@ def run():
     material_ids = json.loads(materials_raw) if materials_raw else None
     constr = json.loads(constraints_raw) if constraints_raw else None
 
+    if not material_ids:
+        return jsonify(error="No materials selected"), 400
+
     try:
         result = run_full_optimization(
             material_ids=material_ids,

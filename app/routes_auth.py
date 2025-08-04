@@ -16,13 +16,13 @@ def login():
         user  = User.query.filter_by(username=uname).first()
         if user and user.check_password(pw):
             login_user(user)
-            # задаваме schema в сесия за оператор
+            # set schema in session for operator
             if user.role == "operator" and user.client:
                 session["schema"] = user.client.schema_name
             else:
                 session.pop("schema", None)
             return redirect(url_for("materials.page_materials"))
-        flash("Невалиден потребител или парола.", "danger")
+        flash("Invalid username or password.", "danger")
 
     return render_template("login.html")
 
@@ -32,5 +32,5 @@ def login():
 def logout():
     logout_user()
     session.pop("schema", None)
-    flash("Излязохте успешно.", "info")
+    flash("Logged out successfully.", "info")
     return redirect(url_for("auth.login"))

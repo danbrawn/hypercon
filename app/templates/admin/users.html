@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% block content %}
-<h3>Управление на потребители</h3>
+<h3>Manage Users</h3>
 
 <form method="post" class="mb-3">
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -26,7 +26,7 @@
       </select>
     </div>
     <div class="col-auto">
-      <button class="btn btn-success">Добави</button>
+      <button class="btn btn-success">Add</button>
     </div>
   </div>
 </form>
