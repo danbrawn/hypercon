@@ -1,5 +1,5 @@
 
-from flask import Blueprint, render_template, jsonify, request
+from flask import Blueprint, render_template, jsonify, request, session
 from flask_login import login_required
 from threading import Thread
 from uuid import uuid4
@@ -16,8 +16,8 @@ _jobs: dict[str, dict] = {}
 @bp.route('', methods=['GET'])
 @login_required
 def page():
-    tbl = _get_materials_table()
     schema = session.get('schema', 'main')
+    tbl = _get_materials_table(schema)
     table_name = tbl.name
     rows = db.session.execute(tbl.select()).mappings().all()
     cols = list(tbl.columns.keys())
@@ -83,5 +83,4 @@ def progress():
         data["error"] = job["error"]
     if job["result"] is not None:
         data["result"] = job["result"]
-
     return jsonify(data)
