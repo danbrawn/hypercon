@@ -2,12 +2,13 @@ from flask import Blueprint, request, render_template, flash, redirect, url_for,
 import pandas as pd
 from sqlalchemy import MetaData, Table, select, text
 from . import db
-from flask_login import current_user,login_required
+from flask_login import current_user, login_required
+import re
 
 bp = Blueprint("materials", __name__)
 
 def get_materials_table():
-    # Избираме схема: операторите – от session, админ – main
+    # Choose schema: operators from session, admin uses main
     sch = session.get("schema") if current_user.role == "operator" else "main"
     meta = MetaData(schema=sch)
     return Table("materials_grit", meta, autoload_with=db.engine)
@@ -15,18 +16,18 @@ def get_materials_table():
 @bp.route("/materials")
 @login_required
 def page_materials():
-    # вече сме сигурни, че current_user има атрибут role
+    # at this point we're sure current_user has a role attribute
     sch = session.get("schema") if current_user.role == "operator" else "main"
     tbl = Table(f"materials_grit", MetaData(), schema=sch, autoload_with=db.engine)
     #tbl = get_materials_table()
-    # Покажи коя схема и коя таблица ползваме
+    # Show which schema and table are being used
     current_schema = tbl.schema or "public"
     table_name     = tbl.name
 
-    # Четем редовете
+    # Read rows
     rows = db.session.execute(tbl.select()).mappings().all()
 
-    # Подреждаме колоните: нестандартни + числови по нарастващо
+    # Arrange columns: non-numeric first, then numeric ascending
     cols   = list(tbl.columns.keys())
     nonnum = [c for c in cols if not c.isdigit()]
     num    = sorted([c for c in cols if c.isdigit()], key=lambda x: int(x))
@@ -44,7 +45,7 @@ def page_materials():
 def import_excel():
     f = request.files.get("file")
     if not f:
-        flash("Не е избран файл.", "danger")
+        flash("No file selected.", "danger")
         return redirect(url_for("materials.page_materials"))
 
     try:
@@ -53,13 +54,33 @@ def import_excel():
         # Treat empty cells or whitespace as missing values
         df = df.replace(r'^\s*$', pd.NA, regex=True)
     except Exception as e:
-        flash(f"Грешка при четене: {e}", "danger")
+        flash(f"Error reading file: {e}", "danger")
         return redirect(url_for("materials.page_materials"))
+
+    # Validate numeric columns
+    for col in df.columns:
+        if col.isdigit():
+            df[col] = pd.to_numeric(df[col], errors="coerce")
+            if df[col].isnull().any():
+                flash(f"Column {col} must contain only numeric values.", "danger")
+                return redirect(url_for("materials.page_materials"))
+
+    # Validate material names if present
+    if "material_name" in df.columns:
+        valid = df["material_name"].apply(
+            lambda x: isinstance(x, str) and re.fullmatch(r"[A-Za-z0-9 _-]+", x)
+        )
+        if not valid.all():
+            flash(
+                "Material names must use only Latin letters, numbers, spaces, hyphens, or underscores.",
+                "danger",
+            )
+            return redirect(url_for("materials.page_materials"))
 
     tbl = get_materials_table()
     existing = set(tbl.columns.keys())
 
-    # Добавяме нови колони, ако ги няма
+    # Add new columns if missing
     for col in df.columns:
         if col not in existing:
             ddl = text(
@@ -69,7 +90,7 @@ def import_excel():
             db.session.execute(ddl)
     db.session.commit()
 
-    # Презареждаме meta, за да хванем новите колони
+    # Reload metadata to capture new columns
     tbl = get_materials_table()
     cols = list(tbl.columns.keys())
     keycol = "material_name" if "material_name" in cols else cols[0]
@@ -82,7 +103,7 @@ def import_excel():
             db.session.execute(select(func.max(tbl.c.id))).scalar() or 0
         ) + 1
 
-    # Upsert логика
+    # Upsert logic
     for _, row in df.iterrows():
         data = {
             c: row[c]
@@ -119,5 +140,17 @@ def import_excel():
             db.session.execute(tbl.insert().values(**data))
 
     db.session.commit()
-    flash("Импортирано успешно.", "success")
+    flash("Import successful.", "success")
+    return redirect(url_for("materials.page_materials"))
+
+
+@bp.route("/materials/delete", methods=["POST"])
+@login_required
+def delete_rows():
+    ids = request.form.getlist("ids")
+    if ids:
+        tbl = get_materials_table()
+        db.session.execute(tbl.delete().where(tbl.c.id.in_(map(int, ids))))
+        db.session.commit()
+        flash(f"Deleted {len(ids)} rows.", "success")
     return redirect(url_for("materials.page_materials"))

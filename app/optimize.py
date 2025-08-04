@@ -20,8 +20,8 @@ except Exception:  # pragma: no cover
 
 from . import db
 
-# Степента за нормализация на профилите
-# Изведена от предоставените Excel формули
+# Normalization exponent for profiles
+# Derived from provided Excel formulas
 POWER = 0.217643428858232
 MAX_COMPONENTS = 7  # maximum number of materials considered in a mix
 RESTARTS = 10       # number of random restarts for SLSQP
@@ -46,7 +46,7 @@ def _is_valid_prop(col: str, limit: float) -> bool:
     return num is not None and num <= limit
 
 def _get_materials_table(schema: Optional[str] = None):
-    """Връща таблицата materials_grit за указаната или текущата схема."""
+    """Return the materials_grit table for the given or current schema."""
 
 
 def _is_valid_prop(col: str, limit: float) -> bool:
@@ -75,9 +75,9 @@ def load_data(schema: Optional[str] = None):
     rows = db.session.execute(stmt).mappings().all()
 
     if not rows:
-        raise ValueError('Не са намерени материали за оптимизиране')
+        raise ValueError('No materials found for optimization')
     if not numeric_cols:
-        raise ValueError('Няма подходящи числови колони')
+        raise ValueError('No suitable numeric columns')
 
     # build arrays
     values = np.array([[row[c] for c in numeric_cols] for row in rows], dtype=float)
@@ -285,7 +285,7 @@ def find_best_mix(names: np.ndarray,
                 [f"{names[j]}: {f*100:.2f}%" for j, f in zip(combo_idx, frac_vals)]
             )
             print(
-                f"\nMSE: {mse_val:.6f} | Комбо: [{', '.join(combo_names)}] | Пропорции: [{frac_str}]"
+                f"\nMSE: {mse_val:.6f} | Combo: [{', '.join(combo_names)}] | Proportions: [{frac_str}]"
             )
             if mse_threshold is not None and mse_val <= mse_threshold:
                 best = res
@@ -293,7 +293,7 @@ def find_best_mix(names: np.ndarray,
                 break
     sys.stdout.write("\n")
     if not results:
-        raise RuntimeError('Няма успешно решение за оптимизация')
+        raise RuntimeError('No successful solution for optimization')
     if best is None:
         best = min(results, key=lambda t: t[0])
     return best
