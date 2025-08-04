@@ -1,28 +1,38 @@
-from flask import Blueprint, render_template, jsonify, request
-from flask_login import login_required
+from flask import Blueprint, render_template, jsonify, request, current_app, session
+from flask_login import login_required, current_user
+from threading import Thread
+from uuid import uuid4
+
+from sqlalchemy import text
 
 from . import db
 from .optimize import run_full_optimization, _get_materials_table
+from .models import ResultsRecipe
 
 bp = Blueprint('optimize_bp', __name__)
+
+# simple in-memory job store
+_jobs: dict[str, dict] = {}
 
 @bp.route('', methods=['GET'])
 @login_required
 def page():
     tbl = _get_materials_table()
-    schema = tbl.schema or 'public'
+    schema = session.get('schema', 'main')
     table_name = tbl.name
     rows = db.session.execute(tbl.select()).mappings().all()
     cols = list(tbl.columns.keys())
     nonnum = [c for c in cols if not c.isdigit()]
     num = sorted([c for c in cols if c.isdigit()], key=lambda x: int(x))
     columns = ['use'] + nonnum + num
+    materials = [{'id': r['id'], 'name': r['material_name']} for r in rows]
     return render_template(
         'optimize.html',
         schema=schema,
         table_name=table_name,
         columns=columns,
         rows=rows,
+        materials=materials,
     )
 
 @bp.route('/run', methods=['POST'])
@@ -32,20 +42,66 @@ def run():
 
     materials_raw = request.form.get('materials')
     constraints_raw = request.form.get('constraints')
+    schema = request.form.get('schema') or session.get('schema')
 
     material_ids = json.loads(materials_raw) if materials_raw else None
     constr = json.loads(constraints_raw) if constraints_raw else None
 
-    if not material_ids:
-        return jsonify(error="No materials selected"), 400
+    job_id = str(uuid4())
+    progress = {"total": 0, "done": 0}
+    _jobs[job_id] = {"progress": progress, "result": None, "error": None}
 
-    try:
-        result = run_full_optimization(
-            material_ids=material_ids,
-            constraints=[(int(c['id']), c['op'], float(c['val'])) for c in constr] if constr else None,
-        )
-    except Exception as exc:
-        return jsonify(error=str(exc)), 400
-    if result is None:
-        return jsonify(error='Optimization failed'), 400
-    return jsonify(result)
+    user_id = current_user.id if hasattr(current_user, 'id') else None
+
+    app = current_app._get_current_object()
+
+    def worker():
+        with app.app_context():
+            try:
+                if schema:
+                    db.session.execute(text(f"SET search_path TO {schema}, main"))
+                else:
+                    db.session.execute(text("SET search_path TO main"))
+                res = run_full_optimization(
+                    schema=schema,
+                    material_ids=material_ids,
+                    constraints=[(int(c['id']), c['op'], float(c['val'])) for c in constr] if constr else None,
+                    progress=progress,
+                    user_id=user_id,
+                )
+                if res is None:
+                    raise ValueError("Invalid optimization response")
+
+                materials = [
+                    {"name": res["material_names"][i], "percent": float(res["weights"][i])}
+                    for i in range(len(res["material_ids"]))
+                ]
+                db.session.add(
+                    ResultsRecipe(mse=float(res["best_mse"]), materials=materials)
+                )
+                db.session.commit()
+
+                _jobs[job_id]["result"] = res
+            except Exception as exc:
+                db.session.rollback()
+                _jobs[job_id]["error"] = str(exc)
+            finally:
+                progress["done"] = progress.get("total", 0)
+
+    Thread(target=worker, daemon=True).start()
+
+    return jsonify(job_id=job_id)
+
+
+@bp.route('/progress/<job_id>', methods=['GET'])
+@login_required
+def progress(job_id: str):
+    job = _jobs.get(job_id)
+    if not job:
+        return jsonify(error='invalid job'), 404
+    data = dict(job['progress'])
+    if job['result'] is not None:
+        data['result'] = job['result']
+    if job['error'] is not None:
+        data['error'] = job['error']
+    return jsonify(data)
