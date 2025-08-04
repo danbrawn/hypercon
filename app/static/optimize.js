@@ -157,6 +157,10 @@ runBtn.addEventListener('click', e => {
 });
 
 function showResult(res) {
+  // some backends may wrap the payload inside a `result` field
+  if (res && typeof res.result === 'object') {
+    res = res.result;
+  }
   if (!res || !Array.isArray(res.material_ids) || !Array.isArray(res.weights)) {
     alert(res && res.error ? res.error : 'Invalid optimization response.');
     console.error('Invalid response', res);
