@@ -16,7 +16,7 @@ def login():
         user  = User.query.filter_by(username=uname).first()
         if user and user.check_password(pw):
             login_user(user)
-            # задаваме schema в сесия за оператор
+            # set schema in session for operator
             if user.role == "operator" and user.client:
                 session["schema"] = user.client.schema_name
             else:

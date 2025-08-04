@@ -7,7 +7,7 @@ from flask_login import current_user,login_required
 bp = Blueprint("materials", __name__)
 
 def get_materials_table():
-    # Избираме схема: операторите – от session, админ – main
+    # Choose schema: operators from session, admin uses main
     sch = session.get("schema") if current_user.role == "operator" else "main"
     meta = MetaData(schema=sch)
     return Table("materials_grit", meta, autoload_with=db.engine)
@@ -15,18 +15,18 @@ def get_materials_table():
 @bp.route("/materials")
 @login_required
 def page_materials():
-    # вече сме сигурни, че current_user има атрибут role
+    # at this point we're sure current_user has a role attribute
     sch = session.get("schema") if current_user.role == "operator" else "main"
     tbl = Table(f"materials_grit", MetaData(), schema=sch, autoload_with=db.engine)
     #tbl = get_materials_table()
-    # Покажи коя схема и коя таблица ползваме
+    # Show which schema and table are being used
     current_schema = tbl.schema or "public"
     table_name     = tbl.name
 
-    # Четем редовете
+    # Read rows
     rows = db.session.execute(tbl.select()).mappings().all()
 
-    # Подреждаме колоните: нестандартни + числови по нарастващо
+    # Arrange columns: non-numeric first, then numeric ascending
     cols   = list(tbl.columns.keys())
     nonnum = [c for c in cols if not c.isdigit()]
     num    = sorted([c for c in cols if c.isdigit()], key=lambda x: int(x))
@@ -59,7 +59,7 @@ def import_excel():
     tbl = get_materials_table()
     existing = set(tbl.columns.keys())
 
-    # Добавяме нови колони, ако ги няма
+    # Add new columns if missing
     for col in df.columns:
         if col not in existing:
             ddl = text(
@@ -69,7 +69,7 @@ def import_excel():
             db.session.execute(ddl)
     db.session.commit()
 
-    # Презареждаме meta, за да хванем новите колони
+    # Reload metadata to capture new columns
     tbl = get_materials_table()
     cols = list(tbl.columns.keys())
     keycol = "material_name" if "material_name" in cols else cols[0]
@@ -82,7 +82,7 @@ def import_excel():
             db.session.execute(select(func.max(tbl.c.id))).scalar() or 0
         ) + 1
 
-    # Upsert логика
+    # Upsert logic
     for _, row in df.iterrows():
         data = {
             c: row[c]

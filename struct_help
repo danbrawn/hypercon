@@ -1,21 +1,22 @@
 beton-mvp/
-- config.ini
-- requirements.txt
-- run.py
-- app/
-  - __init__.py
-  - config.py
-  - models.py
-  - routes_materials.py
-  - templates/
-    - base.html
-    - materials.html
-- migrations/  <- created by `flask db init`
+├── config.ini
+├── requirements.txt
+├── run.py
+├── app/
+│   ├── __init__.py
+│   ├── config.py
+│   ├── models.py
+│   ├── routes_materials.py
+│   └── templates/
+│       ├── base.html
+│       └── materials.html
+└── migrations/        <- created by `flask db init`
 
-config.ini holds all details: host, port, user, password, database, schema, table.
+config.ini contains all details: host, port, user, password, database, schema, table.
 
 config.py reads these values and forms DB_URI, MATERIALS_TABLE and MATERIALS_SCHEMA.
 
-models.py defines Material = Table(...) using reflection (autoload_with=db.engine).
+models.py defines Material = Table(...) with reflection (autoload_with=db.engine).
 
-routes_materials.py uses core-style Material.select(), .delete() and .insert() without touching column names in code.
+routes_materials.py uses Core-style Material.select(), .delete() and .insert() without touching columns in the code.
+

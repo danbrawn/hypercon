@@ -20,8 +20,8 @@ except Exception:  # pragma: no cover
 
 from . import db
 
-# Степента за нормализация на профилите
-# Изведена от предоставените Excel формули
+# Normalization exponent for profiles
+# Derived from provided Excel formulas
 POWER = 0.217643428858232
 MAX_COMPONENTS = 7  # maximum number of materials considered in a mix
 RESTARTS = 10       # number of random restarts for SLSQP
@@ -46,7 +46,7 @@ def _is_valid_prop(col: str, limit: float) -> bool:
     return num is not None and num <= limit
 
 def _get_materials_table(schema: Optional[str] = None):
-    """Връща таблицата materials_grit за указаната или текущата схема."""
+    """Return the materials_grit table for the given or current schema."""
 
 
 def _is_valid_prop(col: str, limit: float) -> bool:

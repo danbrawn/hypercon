@@ -1,6 +1,6 @@
 # app/__init__.py
 
-# ◉ Monkey‑patch за Flask-WTF & нов Werkzeug
+# ◉ Monkey-patch for Flask-WTF & new Werkzeug
 import urllib.parse, werkzeug.urls
 werkzeug.urls.url_encode = lambda q, charset='utf-8', separator='&': urllib.parse.urlencode(q, doseq=True)
 
@@ -60,7 +60,7 @@ def create_app():
     db.init_app(app)
     login_manager.init_app(app)
     login_manager.login_view            = "auth.login"
-    login_manager.login_message         = "Моля, влезте, за да продължите."
+    login_manager.login_message         = "Please log in to continue."
     login_manager.login_message_category= "warning"
     bcrypt.init_app(app)
     csrf.init_app(app)
