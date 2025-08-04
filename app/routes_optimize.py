@@ -66,6 +66,7 @@ def run():
                     schema=schema,
                     material_ids=material_ids,
                     constraints=[(int(c['id']), c['op'], float(c['val'])) for c in constr] if constr else None,
+                    progress=progress,
                     user_id=user_id,
                 )
                 _jobs[job_id]["result"] = result
