@@ -271,6 +271,7 @@ def find_best_mix(
         # Provide simple console progress so operators can observe search evolution
         print(f"Progress: {i}/{total} combinations ({(i/total)*100:.1f}% done)")
 
+
         # Skip combos that don't contain materials from equality/">" constraints
         if constraints:
             required = {
