@@ -81,7 +81,6 @@ def run():
                 )
                 db.session.commit()
 
-
                 _jobs[job_id]["result"] = res
             except Exception as exc:
                 db.session.rollback()

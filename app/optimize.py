@@ -254,6 +254,11 @@ def optimize_with_restarts(
         if best is None or cand[0] < best[0]:
             best = cand
 
+    if best is None:
+        # Fallback to equal weights if the optimizer fails for all restarts
+        w = np.full(k, 1.0 / k)
+        return compute_mse(w, values, target), w
+
     return best
 
 
