@@ -27,6 +27,7 @@ def create_app():
     # — Load base config & override
     app.config.update(
         SQLALCHEMY_DATABASE_URI        = DB_URI,
+        SQLALCHEMY_ENGINE_OPTIONS      = {"connect_args": {"options": "-csearch_path=main"}},
         SQLALCHEMY_TRACK_MODIFICATIONS = False,
         SECRET_KEY                     = os.environ.get("SECRET_KEY", "change_me_for_prod"),
         WTF_CSRF_TIME_LIMIT            = None,
@@ -100,7 +101,6 @@ def create_app():
 
     # ── Create tables & load metadata ─────────────────────────────────────────
     with app.app_context():
-        db.session.execute(text("SET search_path TO main"))
         db.create_all()
 
     # ── Blueprint registration ────────────────────────────────────────────────
