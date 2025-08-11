@@ -10,8 +10,8 @@ bp = Blueprint("materials", __name__)
 def get_materials_table():
     # Choose schema: operators from session, admin uses main
     sch = session.get("schema") if current_user.role == "operator" else "main"
-    meta = MetaData(schema=sch)
-    return Table("materials_grit", meta, autoload_with=db.engine)
+    meta = MetaData()
+    return Table("materials_grit", meta, schema=sch, autoload_with=db.engine)
 
 @bp.route("/materials")
 @login_required
