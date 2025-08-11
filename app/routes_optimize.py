@@ -1,6 +1,7 @@
 
 from flask import Blueprint, render_template, jsonify, request, session
 from flask_login import login_required, current_user
+from sqlalchemy import select
 
 from . import db
 from .optimize import run_full_optimization, _get_materials_table
@@ -14,7 +15,8 @@ def page():
     schema = session.get('schema', 'main')
     tbl = _get_materials_table(schema)
     table_name = tbl.name
-    rows = db.session.execute(tbl.select()).mappings().all()
+    stmt = select(*[c.label(c.name) for c in tbl.c])
+    rows = db.session.execute(stmt).mappings().all()
     cols = list(tbl.columns.keys())
     nonnum = [c for c in cols if not c.isdigit()]
     num = sorted([c for c in cols if c.isdigit()], key=lambda x: int(x))
