@@ -2,7 +2,6 @@
 from flask import Blueprint, render_template, jsonify, request, session
 from flask_login import login_required, current_user
 from sqlalchemy import select
-from sqlalchemy.sql.expression import LABEL_STYLE_NONE
 
 from . import db
 from .optimize import run_full_optimization, _get_materials_table
@@ -16,7 +15,7 @@ def page():
     schema = session.get('schema', 'main')
     tbl = _get_materials_table(schema)
     table_name = tbl.name
-    stmt = select(tbl).set_label_style(LABEL_STYLE_NONE)
+    stmt = select(*[c.label(c.name) for c in tbl.c])
     rows = db.session.execute(stmt).mappings().all()
     cols = list(tbl.columns.keys())
     nonnum = [c for c in cols if not c.isdigit()]
