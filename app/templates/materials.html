@@ -35,7 +35,7 @@
       <tbody>
         {% for row in rows %}
           <tr>
-            <td><input type="checkbox" name="ids" value="{{ row['id'] }}" class="row-chk"></td>
+            <td><input type="checkbox" name="ids" value="{{ row[keycol] }}" class="row-chk"></td>
             {% for col in columns %}
               <td>{{ row[col] }}</td>
             {% endfor %}

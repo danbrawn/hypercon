@@ -50,8 +50,8 @@ def _get_materials_table(schema: Optional[str] = None):
         sch = session.get('schema', 'main')
     else:
         sch = 'main'
-    meta = MetaData(schema=sch)
-    return Table('materials_grit', meta, autoload_with=db.engine)
+    meta = MetaData()
+    return Table('materials_grit', meta, schema=sch, autoload_with=db.engine)
 
 def load_data(schema: Optional[str] = None, user_id: Optional[int] = None):
     tbl = _get_materials_table(schema)
