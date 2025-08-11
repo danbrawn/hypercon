@@ -16,10 +16,8 @@ def page():
     tbl = _get_materials_table(schema)
     table_name = tbl.name
     stmt = select(*[c.label(c.name) for c in tbl.c])
-    result = db.session.execute(stmt).all()
-    # Convert rows to plain dictionaries keyed by column names to avoid
-    # SQLAlchemy's strict mapping lookup which triggered NoSuchColumnError
-    rows = [{col.name: row[col] for col in tbl.c} for row in result]
+    # Fetch rows as mappings so column names can be accessed directly
+    rows = db.session.execute(stmt).mappings().all()
     cols = list(tbl.columns.keys())
     nonnum = [c for c in cols if not c.isdigit()]
     num = sorted([c for c in cols if c.isdigit()], key=lambda x: int(x))
