@@ -101,6 +101,7 @@ def create_app():
 
     # ── Create tables & load metadata ─────────────────────────────────────────
     with app.app_context():
+        db.session.execute(text("SET search_path TO main"))
         db.create_all()
 
     # ── Blueprint registration ────────────────────────────────────────────────
