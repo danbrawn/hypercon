@@ -5,7 +5,8 @@ from app.models import Client, User
 
 
 def main() -> None:
-    app = create_app()
+    wrapped_app = create_app()
+    app = getattr(wrapped_app, "app", wrapped_app)
     with app.app_context():
         # ensure a default client for operators
         if not Client.query.filter_by(name="Default").first():
