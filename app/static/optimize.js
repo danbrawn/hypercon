@@ -2,7 +2,7 @@ const form = document.getElementById('opt-form');
 const runBtn = document.getElementById('run');
 const spinner = document.getElementById('spinner');
 const resultDiv = document.getElementById('result');
-const materials = JSON.parse(document.getElementById('materials-data').textContent);
+const materials = JSON.parse(document.getElementById('materials-data').value);
 const addConstrBtn = document.getElementById('add-constr');
 const constrBody = document.getElementById('constraints-body');
 const selectAllBtn = document.getElementById('select-all');
@@ -181,20 +181,21 @@ runBtn.addEventListener('click', e => {
     credentials: 'same-origin'
   })
     .then(r =>
-      r
-        .text()
-        .then(txt => {
-          let data;
-          try {
-            data = JSON.parse(txt);
-          } catch (e) {
-            throw new Error(txt || e.message);
+      r.text().then(txt => {
+        let data;
+        try {
+          data = JSON.parse(txt);
+        } catch (e) {
+          if (!r.ok) {
+            throw new Error(`Server error ${r.status}`);
           }
-          if (!r.ok || data.error) {
-            throw new Error(data.error || r.status);
-          }
-          return data;
-        })
+          throw new Error('Invalid response');
+        }
+        if (!r.ok || data.error) {
+          throw new Error(data.error || `Server error ${r.status}`);
+        }
+        return data;
+      })
     )
     .then(data => {
       showResult(data);
