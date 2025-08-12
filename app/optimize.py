@@ -379,3 +379,4 @@ def run_full_optimization(
         return None
     # unpack the best result
     return format_best(best)
+

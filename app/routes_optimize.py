@@ -1,3 +1,4 @@
+
 from flask import Blueprint, render_template, jsonify, request, session, current_app
 from flask_login import login_required, current_user
 from sqlalchemy import select
@@ -142,4 +143,5 @@ def stop():
         return jsonify(error="No running optimization"), 400
     job['stop'].set()
     return jsonify(status="stopping", result=job.get('best'))
+
 

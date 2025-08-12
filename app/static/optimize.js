@@ -15,6 +15,7 @@ const csrfToken = form.querySelector('input[name="csrf_token"]').value;
 let timer = null;
 let poller = null;
 
+
 const MAX_COMBO = 7; // should mirror backend
 const SECONDS_PER_COMBO = 0.15;
 
@@ -200,6 +201,7 @@ runBtn.addEventListener('click', e => {
         throw new Error(data.error || `Server error ${r.status}`);
       }
       poller = setInterval(checkStatus, 2000);
+
     })
     .catch(err => {
       console.error('Optimization error', err);
@@ -253,6 +255,7 @@ stopBtn.addEventListener('click', () => {
       console.error('Stop error', err);
       alert('Failed to stop optimization');
       finalize();
+
     });
 });
 
