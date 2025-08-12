@@ -9,6 +9,7 @@
 
 <form id="opt-form" action="{{ url_for('optimize_bp.run') }}" method="post">
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <input type="hidden" id="materials-data" value='{{ materials|tojson }}'>
 
   <div class="mb-2">
     <button type="button" id="select-all" class="btn btn-sm btn-secondary">Select All</button>
@@ -67,12 +68,6 @@
   </table>
   <canvas id="chart" width="600" height="300"></canvas>
 </div>
-
-<script id="materials-data" type="application/json">
-  [
-  {% for r in rows %}{"id": {{ r['id'] }}, "name": "{{ r['material_name'] }}"}{% if not loop.last %},{% endif %}{% endfor %}
-  ]
-</script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script src="{{ url_for('static', filename='optimize.js') }}"></script>
 {% endblock %}
