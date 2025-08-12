@@ -191,6 +191,9 @@ runBtn.addEventListener('click', e => {
           }
           throw new Error('Invalid response');
         }
+        if (r.status === 202) {
+          return { pending: true, message: data.error || data.message };
+        }
         if (!r.ok || data.error) {
           throw new Error(data.error || `Server error ${r.status}`);
         }
@@ -198,6 +201,10 @@ runBtn.addEventListener('click', e => {
       })
     )
     .then(data => {
+      if (data.pending) {
+        alert(data.message || 'Optimization running. Check Results later.');
+        return;
+      }
       showResult(data);
     })
     .catch(err => {
