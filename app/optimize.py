@@ -308,7 +308,7 @@ def run_full_optimization(
     schema: Optional[str] = None,
     property_limit: float = 1000.0,
     max_combo_num: int = MAX_COMPONENTS,
-    mse_threshold: float | None = 0.0004,
+    mse_threshold: float | None = 0.0002,
     material_ids: Optional[list[int]] = None,
     constraints: Optional[list[tuple[int, str, float]]] = None,
     user_id: Optional[int] = None,
