@@ -1,5 +1,6 @@
 const form = document.getElementById('opt-form');
 const runBtn = document.getElementById('run');
+const stopBtn = document.getElementById('stop');
 const spinner = document.getElementById('spinner');
 const resultDiv = document.getElementById('result');
 const materials = JSON.parse(document.getElementById('materials-data').value);
@@ -10,6 +11,10 @@ const unselectAllBtn = document.getElementById('unselect-all');
 const estSpan = document.getElementById('est-time');
 const elapsedSpan = document.getElementById('elapsed-time');
 const elapsedWrap = document.getElementById('elapsed-wrap');
+const csrfToken = form.querySelector('input[name="csrf_token"]').value;
+let timer = null;
+let poller = null;
+
 
 const MAX_COMBO = 7; // should mirror backend
 const SECONDS_PER_COMBO = 0.15;
@@ -156,7 +161,7 @@ addConstrBtn.addEventListener('click', () => {
 runBtn.addEventListener('click', e => {
   e.preventDefault();
   const formData = new FormData();
-  formData.append('csrf_token', form.querySelector('input[name="csrf_token"]').value);
+  formData.append('csrf_token', csrfToken);
   const ids = getSelectedIds();
   const constr = Array.from(constrBody.querySelectorAll('tr')).map(tr => ({
     id: parseInt(tr.querySelector('.con-mat').value),
@@ -166,12 +171,13 @@ runBtn.addEventListener('click', e => {
   formData.append('materials', JSON.stringify(ids));
   formData.append('constraints', JSON.stringify(constr));
   runBtn.disabled = true;
+  stopBtn.classList.remove('d-none');
   resultDiv.classList.add('d-none');
   spinner.classList.remove('d-none');
   elapsedWrap.classList.remove('d-none');
   let start = Date.now();
   elapsedSpan.textContent = '0s';
-  const timer = setInterval(() => {
+  timer = setInterval(() => {
     const secs = (Date.now() - start) / 1000;
     elapsedSpan.textContent = formatDuration(secs);
   }, 1000);
@@ -180,41 +186,76 @@ runBtn.addEventListener('click', e => {
     body: formData,
     credentials: 'same-origin'
   })
-    .then(r =>
-      r.text().then(txt => {
-        let data;
-        try {
-          data = JSON.parse(txt);
-        } catch (e) {
-          if (!r.ok) {
-            throw new Error(`Server error ${r.status}`);
-          }
-          throw new Error('Invalid response');
+    .then(async r => {
+      const txt = await r.text();
+      let data;
+      try {
+        data = JSON.parse(txt);
+      } catch (e) {
+        if (!r.ok) {
+          throw new Error(`Server error ${r.status}`);
         }
-        if (r.status === 202) {
-          return { pending: true, message: data.error || data.message };
-        }
-        if (!r.ok || data.error) {
-          throw new Error(data.error || `Server error ${r.status}`);
-        }
-        return data;
-      })
-    )
-    .then(data => {
-      if (data.pending) {
-        alert(data.message || 'Optimization running. Check Results later.');
-        return;
+        throw new Error('Invalid response');
       }
-      showResult(data);
+      if (!r.ok && r.status !== 202) {
+        throw new Error(data.error || `Server error ${r.status}`);
+      }
+      poller = setInterval(checkStatus, 2000);
+
     })
     .catch(err => {
       console.error('Optimization error', err);
       alert(err.message || 'Optimization error.');
+      finalize();
+    });
+});
+
+function checkStatus() {
+  fetch(form.action.replace('run', 'status'), { credentials: 'same-origin' })
+    .then(r => r.json())
+    .then(data => {
+      if (data.status === 'running') {
+        return;
+      }
+      if (data.status === 'done') {
+        showResult(data.result);
+      } else if (data.status === 'error') {
+        alert('Optimization error');
+      }
+      finalize();
     })
-    .finally(() => {
-      spinner.classList.add('d-none');
-      runBtn.disabled = false;
-      clearInterval(timer);
+    .catch(err => {
+      console.error('Status error', err);
+    });
+}
+
+function finalize() {
+  spinner.classList.add('d-none');
+  runBtn.disabled = false;
+  stopBtn.classList.add('d-none');
+  if (timer) clearInterval(timer);
+  if (poller) clearInterval(poller);
+}
+
+stopBtn.addEventListener('click', () => {
+  fetch(form.action.replace('run', 'stop'), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: `csrf_token=${encodeURIComponent(csrfToken)}`,
+    credentials: 'same-origin'
+  })
+    .then(r => r.json())
+    .then(data => {
+      if (data.result) {
+        showResult(data.result);
+      }
+      finalize();
+    })
+    .catch(err => {
+      console.error('Stop error', err);
+      alert('Failed to stop optimization');
+      finalize();
+
     });
 });
 
