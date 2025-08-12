@@ -3,11 +3,12 @@
 import itertools
 import numpy as np
 import pandas as pd
+import threading
 
 from sqlalchemy import MetaData, Table, select
 from flask import session, has_request_context
 from flask_login import current_user
-from typing import Optional
+from typing import Optional, Callable
 import re
 import itertools
 
@@ -256,6 +257,8 @@ def find_best_mix(
     mse_threshold: float | None = None,
     n_restarts: int = RESTARTS,
     constraints: list[tuple[int, str, float]] | None = None,
+    progress_cb: Callable[[tuple[float, tuple[int, ...], np.ndarray]], None] | None = None,
+    stop_event: threading.Event | None = None,
 ):
     """Evaluate all material combinations and return the best result."""
 
@@ -268,6 +271,8 @@ def find_best_mix(
     best = None
     results: list[tuple[float, tuple[int, ...], np.ndarray]] = []
     for i, combo in enumerate(combos, 1):
+        if stop_event and stop_event.is_set():
+            break
         # Provide simple console progress so operators can observe search evolution
         print(f"Progress: {i}/{total} combinations ({(i/total)*100:.1f}% done)")
 
@@ -296,7 +301,12 @@ def find_best_mix(
             if mse_threshold is not None and mse_val <= mse_threshold:
                 best = res
                 print("Threshold reached, stopping early.")
+                if progress_cb:
+                    progress_cb(best)
                 break
+            if progress_cb and (best is None or mse_val < best[0]):
+                best = res
+                progress_cb(best)
     print()
     if not results:
         return None
@@ -312,6 +322,8 @@ def run_full_optimization(
     material_ids: Optional[list[int]] = None,
     constraints: Optional[list[tuple[int, str, float]]] = None,
     user_id: Optional[int] = None,
+    progress_cb: Callable[[dict], None] | None = None,
+    stop_event: threading.Event | None = None,
 ):
     """Load materials and search for the optimal mix."""
 
@@ -327,6 +339,29 @@ def run_full_optimization(
             if mid in id_to_idx:
                 constr_idx.append((id_to_idx[mid], op, float(val)))
 
+    def format_best(best_tuple):
+        mse, combo, weights = best_tuple
+        mse = float(mse)
+        weights = np.asarray(weights, dtype=float)
+        mixed = weights.dot(values[list(combo)])
+        weights = np.nan_to_num(weights, nan=0.0, posinf=0.0, neginf=0.0)
+        mixed = np.nan_to_num(mixed, nan=0.0, posinf=0.0, neginf=0.0)
+        tgt = np.nan_to_num(target, nan=0.0, posinf=0.0, neginf=0.0)
+        mse = float(np.nan_to_num(mse, nan=0.0, posinf=0.0, neginf=0.0))
+        return {
+            'material_ids': [int(ids[i]) for i in combo],
+            'material_names': [str(names[i]) for i in combo],
+            'weights': weights.tolist(),
+            'best_mse': mse,
+            'prop_columns': list(map(str, prop_cols)),
+            'target_profile': tgt.tolist(),
+            'mixed_profile': mixed.tolist(),
+        }
+
+    def progress_wrapper(best_tuple):
+        if progress_cb:
+            progress_cb(format_best(best_tuple))
+
     best = find_best_mix(
         names,
         values,
@@ -336,32 +371,12 @@ def run_full_optimization(
         mse_threshold,
         RESTARTS,
         constr_idx,
+        progress_cb=progress_wrapper,
+        stop_event=stop_event,
     )
 
     if not best:
         return None
     # unpack the best result
-    mse, combo, weights = best
-    # ensure plain Python types for JSON serialization
-    mse = float(mse)
-    weights = np.asarray(weights, dtype=float)
+    return format_best(best)
 
-    # compute the mixed profile using the chosen materials
-    mixed = weights.dot(values[list(combo)])
-
-    # replace NaN/Inf values so JSON serialization doesn't fail
-    weights = np.nan_to_num(weights, nan=0.0, posinf=0.0, neginf=0.0)
-    mixed = np.nan_to_num(mixed, nan=0.0, posinf=0.0, neginf=0.0)
-    target = np.nan_to_num(target, nan=0.0, posinf=0.0, neginf=0.0)
-    mse = float(np.nan_to_num(mse, nan=0.0, posinf=0.0, neginf=0.0))
-
-    return {
-        # Convert NumPy integer IDs to plain Python ints for JSON serialization
-        'material_ids': [int(ids[i]) for i in combo],
-        'material_names': [str(names[i]) for i in combo],
-        'weights':      weights.tolist(),
-        'best_mse':     mse,
-        'prop_columns': list(map(str, prop_cols)),
-        'target_profile': target.tolist(),
-        'mixed_profile':  mixed.tolist(),
-    }
