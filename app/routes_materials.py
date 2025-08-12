@@ -4,6 +4,7 @@ from sqlalchemy import MetaData, Table, select, text
 from . import db
 from flask_login import current_user, login_required
 import re
+from numbers import Number
 
 bp = Blueprint("materials", __name__)
 
@@ -117,6 +118,13 @@ def import_excel():
 
         if "user_id" in cols:
             data["user_id"] = getattr(current_user, "id", None)
+
+        # Round all numeric values (except identifiers and key) to three decimals
+        exclusions = {"id", "user_id", keycol}
+        data = {
+            k: (round(float(v), 3) if k not in exclusions and isinstance(v, Number) else v)
+            for k, v in data.items()
+        }
 
         key = data.get(keycol)
         if key is None:

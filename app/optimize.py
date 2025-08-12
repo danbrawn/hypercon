@@ -257,7 +257,8 @@ def find_best_mix(
     mse_threshold: float | None = None,
     n_restarts: int = RESTARTS,
     constraints: list[tuple[int, str, float]] | None = None,
-    progress_cb: Callable[[tuple[float, tuple[int, ...], np.ndarray]], None] | None = None,
+    progress_cb: Callable[..., None] | None = None,
+
     stop_event: threading.Event | None = None,
 ):
     """Evaluate all material combinations and return the best result."""
@@ -276,7 +277,6 @@ def find_best_mix(
         # Provide simple console progress so operators can observe search evolution
         print(f"Progress: {i}/{total} combinations ({(i/total)*100:.1f}% done)")
 
-
         # Skip combos that don't contain materials from equality/">" constraints
         if constraints:
             required = {
@@ -285,6 +285,8 @@ def find_best_mix(
                 if op in ('=', '>')
             }
             if not required.issubset(set(combo)):
+                if progress_cb:
+                    progress_cb(progress=i / total)
                 continue
 
         res = optimize_combo(combo, values, target, n_restarts, constraints)
@@ -300,13 +302,20 @@ def find_best_mix(
             )
             if mse_threshold is not None and mse_val <= mse_threshold:
                 best = res
+                if progress_cb:
+                    progress_cb(best=res, progress=i / total)
                 print("Threshold reached, stopping early.")
                 if progress_cb:
                     progress_cb(best)
                 break
             if progress_cb and (best is None or mse_val < best[0]):
                 best = res
-                progress_cb(best)
+                progress_cb(best=res, progress=i / total)
+            elif progress_cb:
+                progress_cb(progress=i / total)
+        elif progress_cb:
+            progress_cb(progress=i / total)
+
     print()
     if not results:
         return None
@@ -325,7 +334,12 @@ def run_full_optimization(
     progress_cb: Callable[[dict], None] | None = None,
     stop_event: threading.Event | None = None,
 ):
-    """Load materials and search for the optimal mix."""
+    """Load materials and search for the optimal mix.
+
+    Designed to run inside a worker thread. The ``progress_cb`` receives periodic
+    progress updates and best-so-far results, while ``stop_event`` allows the
+    caller to request early termination from another thread.
+    """
 
     ids, names, values, target, prop_cols = load_recipe_data(
         property_limit, schema, material_ids, user_id
@@ -358,9 +372,17 @@ def run_full_optimization(
             'mixed_profile': mixed.tolist(),
         }
 
-    def progress_wrapper(best_tuple):
-        if progress_cb:
-            progress_cb(format_best(best_tuple))
+    def progress_wrapper(*, progress: float | None = None, best: tuple | None = None):
+        if not progress_cb:
+            return
+        update: dict = {}
+        if progress is not None:
+            update['progress'] = float(progress)
+        if best is not None:
+            update['best'] = format_best(best)
+        if update:
+            progress_cb(update)
+
 
     best = find_best_mix(
         names,
