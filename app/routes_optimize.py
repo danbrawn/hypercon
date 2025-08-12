@@ -52,8 +52,10 @@ def run():
         schema = session.get('schema', 'main')
         user_id = current_user.id
 
+        app = current_app._get_current_object()
+
         def task():
-            with current_app.app_context():
+            with app.app_context():
                 try:
                     result = run_full_optimization(
                         schema=schema,
