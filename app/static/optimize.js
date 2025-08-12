@@ -2,11 +2,17 @@ const form = document.getElementById('opt-form');
 const runBtn = document.getElementById('run');
 const spinner = document.getElementById('spinner');
 const resultDiv = document.getElementById('result');
-const materials = JSON.parse(document.getElementById('materials-data').textContent);
+const materials = JSON.parse(document.getElementById('materials-data').value);
 const addConstrBtn = document.getElementById('add-constr');
 const constrBody = document.getElementById('constraints-body');
 const selectAllBtn = document.getElementById('select-all');
 const unselectAllBtn = document.getElementById('unselect-all');
+const estSpan = document.getElementById('est-time');
+const elapsedSpan = document.getElementById('elapsed-time');
+const elapsedWrap = document.getElementById('elapsed-wrap');
+
+const MAX_COMBO = 7; // should mirror backend
+const SECONDS_PER_COMBO = 0.15;
 
 // prevent form submission when pressing Enter
 form.addEventListener('submit', e => e.preventDefault());
@@ -15,6 +21,38 @@ function getSelectedIds() {
   return Array.from(document.querySelectorAll('.use-chk:checked')).map(c =>
     parseInt(c.value)
   );
+}
+
+function nCr(n, r) {
+  if (r > n) return 0;
+  let res = 1;
+  for (let i = 1; i <= r; i++) {
+    res = (res * (n - r + i)) / i;
+  }
+  return res;
+}
+
+function formatDuration(sec) {
+  const s = Math.round(sec);
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const rem = s % 60;
+  const parts = [];
+  if (h) parts.push(`${h}h`);
+  if (m || h) parts.push(`${m}m`);
+  parts.push(`${rem}s`);
+  return parts.join(' ');
+}
+
+function updateEstimate() {
+  const n = getSelectedIds().length;
+  const max = Math.min(MAX_COMBO, n);
+  let combos = 0;
+  for (let r = 1; r <= max; r++) {
+    combos += nCr(n, r);
+  }
+  const secs = combos * SECONDS_PER_COMBO;
+  estSpan.textContent = `${formatDuration(secs)} (${combos} combos)`;
 }
 
 function updateConstraintOptions() {
@@ -51,6 +89,7 @@ function updateConstraintOptions() {
       sel.value = sel.options[0].value;
     }
   });
+  updateEstimate();
 }
 
 document.querySelectorAll('.use-chk').forEach(chk =>
@@ -129,31 +168,46 @@ runBtn.addEventListener('click', e => {
   runBtn.disabled = true;
   resultDiv.classList.add('d-none');
   spinner.classList.remove('d-none');
+  elapsedWrap.classList.remove('d-none');
+  let start = Date.now();
+  elapsedSpan.textContent = '0s';
+  const timer = setInterval(() => {
+    const secs = (Date.now() - start) / 1000;
+    elapsedSpan.textContent = formatDuration(secs);
+  }, 1000);
   fetch(form.action, {
     method: 'POST',
     body: formData,
     credentials: 'same-origin'
   })
     .then(r =>
-      r
-        .json()
-        .then(data => {
-          if (!r.ok || data.error) {
-            throw new Error(data.error || r.status);
+      r.text().then(txt => {
+        let data;
+        try {
+          data = JSON.parse(txt);
+        } catch (e) {
+          if (!r.ok) {
+            throw new Error(`Server error ${r.status}`);
           }
-          return data;
-        })
+          throw new Error('Invalid response');
+        }
+        if (!r.ok || data.error) {
+          throw new Error(data.error || `Server error ${r.status}`);
+        }
+        return data;
+      })
     )
     .then(data => {
       showResult(data);
-      spinner.classList.add('d-none');
-      runBtn.disabled = false;
     })
     .catch(err => {
       console.error('Optimization error', err);
       alert(err.message || 'Optimization error.');
+    })
+    .finally(() => {
       spinner.classList.add('d-none');
       runBtn.disabled = false;
+      clearInterval(timer);
     });
 });
 
