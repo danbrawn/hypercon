@@ -154,3 +154,20 @@ def delete_rows():
         db.session.commit()
         flash(f"Deleted {len(ids)} rows.", "success")
     return redirect(url_for("materials.page_materials"))
+
+
+@bp.route("/materials/delete-columns", methods=["POST"])
+@login_required
+def delete_columns():
+    tbl = get_materials_table()
+    keep = {"id", "material_name"}
+    cols = [c for c in tbl.columns.keys() if c not in keep]
+    for col in cols:
+        ddl = text(
+            f'ALTER TABLE "{tbl.schema}"."{tbl.name}" DROP COLUMN "{col}"'
+        )
+        db.session.execute(ddl)
+    if cols:
+        db.session.commit()
+        flash(f"Deleted {len(cols)} columns.", "success")
+    return redirect(url_for("materials.page_materials"))
