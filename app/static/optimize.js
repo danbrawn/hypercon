@@ -182,8 +182,14 @@ runBtn.addEventListener('click', e => {
   })
     .then(r =>
       r
-        .json()
-        .then(data => {
+        .text()
+        .then(txt => {
+          let data;
+          try {
+            data = JSON.parse(txt);
+          } catch (e) {
+            throw new Error(txt || e.message);
+          }
           if (!r.ok || data.error) {
             throw new Error(data.error || r.status);
           }
