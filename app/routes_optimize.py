@@ -1,3 +1,4 @@
+"""Routes for launching and monitoring optimization jobs in a background thread."""
 
 from flask import Blueprint, render_template, jsonify, request, session, current_app
 from flask_login import login_required, current_user
@@ -12,6 +13,15 @@ from .models import ResultsRecipe
 
 bp = Blueprint('optimize_bp', __name__)
 _executor = ThreadPoolExecutor(max_workers=1)
+_jobs: dict[int, dict] = {}
+
+
+# Single-worker executor keeps CPU usage predictable and ensures only one
+# optimization runs at a time per process.
+_executor = ThreadPoolExecutor(max_workers=1)
+
+# In-memory registry of active jobs keyed by user id. Each job stores the
+# future, a stop event, progress fraction, best-so-far result, and start time.
 _jobs: dict[int, dict] = {}
 
 
@@ -41,6 +51,7 @@ def page():
 @bp.route('/run', methods=['POST'])
 @login_required
 def run():
+    """Kick off an optimization in a worker thread and return immediately."""
     import json
 
     try:
@@ -64,11 +75,16 @@ def run():
             'start': time.time(),
             'stop': threading.Event(),
             'best': None,
+            'progress': 0.0,
         }
         _jobs[user_id] = job
 
-        def progress_cb(best):
-            job['best'] = best
+        def progress_cb(update):
+            if 'best' in update:
+                job['best'] = update['best']
+            if 'progress' in update:
+                job['progress'] = update['progress']
+
 
         def task():
             with app.app_context():
@@ -117,6 +133,8 @@ def run():
 @bp.route('/status', methods=['GET'])
 @login_required
 def status():
+    """Report progress for the current user's running job if any."""
+
     user_id = current_user.id
     job = _jobs.get(user_id)
     if not job:
@@ -128,15 +146,17 @@ def status():
         result = job.get('result') or job.get('best')
         _jobs.pop(user_id, None)
         if result:
-            return jsonify(status="done", elapsed=elapsed, result=result)
-        return jsonify(status="error", elapsed=elapsed)
+            return jsonify(status="done", elapsed=elapsed, progress=1.0, result=result)
+        return jsonify(status="error", elapsed=elapsed, progress=job.get('progress', 0.0))
 
-    return jsonify(status="running", elapsed=elapsed, best=job.get('best'))
+    return jsonify(status="running", elapsed=elapsed, progress=job.get('progress', 0.0), best=job.get('best'))
 
 
 @bp.route('/stop', methods=['POST'])
 @login_required
 def stop():
+    """Signal the background optimization to halt."""
+
     user_id = current_user.id
     job = _jobs.get(user_id)
     if not job:

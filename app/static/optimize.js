@@ -11,9 +11,13 @@ const unselectAllBtn = document.getElementById('unselect-all');
 const estSpan = document.getElementById('est-time');
 const elapsedSpan = document.getElementById('elapsed-time');
 const elapsedWrap = document.getElementById('elapsed-wrap');
+const remainingSpan = document.getElementById('remaining-time');
+const remainingWrap = document.getElementById('remaining-wrap');
 const csrfToken = form.querySelector('input[name="csrf_token"]').value;
 let timer = null;
 let poller = null;
+let start = null;
+let estSeconds = 0;
 
 
 const MAX_COMBO = 7; // should mirror backend
@@ -56,8 +60,9 @@ function updateEstimate() {
   for (let r = 1; r <= max; r++) {
     combos += nCr(n, r);
   }
-  const secs = combos * SECONDS_PER_COMBO;
-  estSpan.textContent = `${formatDuration(secs)} (${combos} combos)`;
+  estSeconds = combos * SECONDS_PER_COMBO;
+  estSpan.textContent = `${formatDuration(estSeconds)} (${combos} combos)`;
+
 }
 
 function updateConstraintOptions() {
@@ -175,11 +180,18 @@ runBtn.addEventListener('click', e => {
   resultDiv.classList.add('d-none');
   spinner.classList.remove('d-none');
   elapsedWrap.classList.remove('d-none');
-  let start = Date.now();
+  remainingWrap.classList.remove('d-none');
+  start = Date.now();
   elapsedSpan.textContent = '0s';
+  remainingSpan.textContent = formatDuration(estSeconds);
   timer = setInterval(() => {
     const secs = (Date.now() - start) / 1000;
     elapsedSpan.textContent = formatDuration(secs);
+    const remaining = estSeconds - secs;
+    if (remaining >= 0) {
+      remainingSpan.textContent = formatDuration(remaining);
+    }
+
   }, 1000);
   fetch(form.action, {
     method: 'POST',
@@ -200,6 +212,7 @@ runBtn.addEventListener('click', e => {
       if (!r.ok && r.status !== 202) {
         throw new Error(data.error || `Server error ${r.status}`);
       }
+      checkStatus();
       poller = setInterval(checkStatus, 2000);
 
     })
@@ -214,6 +227,16 @@ function checkStatus() {
   fetch(form.action.replace('run', 'status'), { credentials: 'same-origin' })
     .then(r => r.json())
     .then(data => {
+      if (typeof data.elapsed === 'number') {
+        elapsedSpan.textContent = formatDuration(data.elapsed);
+        start = Date.now() - data.elapsed * 1000;
+      }
+      if (typeof data.progress === 'number' && data.progress > 0) {
+        const remaining = data.elapsed / data.progress - data.elapsed;
+        if (!isNaN(remaining) && remaining >= 0) {
+          remainingSpan.textContent = formatDuration(remaining);
+        }
+      }
       if (data.status === 'running') {
         return;
       }
@@ -233,6 +256,8 @@ function finalize() {
   spinner.classList.add('d-none');
   runBtn.disabled = false;
   stopBtn.classList.add('d-none');
+  remainingWrap.classList.add('d-none');
+
   if (timer) clearInterval(timer);
   if (poller) clearInterval(poller);
 }
