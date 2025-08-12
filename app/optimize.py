@@ -257,6 +257,7 @@ def find_best_mix(
     n_restarts: int = RESTARTS,
     constraints: list[tuple[int, str, float]] | None = None,
     progress_cb: Callable[..., None] | None = None,
+
     stop_event: threading.Event | None = None,
 ):
     """Evaluate all material combinations and return the best result.
@@ -308,6 +309,8 @@ def find_best_mix(
                 if progress_cb:
                     progress_cb(best=res, progress=i / total)
                 print("Threshold reached, stopping early.")
+                if progress_cb:
+                    progress_cb(best)
                 break
             if progress_cb and (best is None or mse_val < best[0]):
                 best = res
@@ -316,6 +319,7 @@ def find_best_mix(
                 progress_cb(progress=i / total)
         elif progress_cb:
             progress_cb(progress=i / total)
+
     print()
     if not results:
         return None
@@ -337,6 +341,7 @@ def run_full_optimization(
     """Load materials and search for the optimal mix.
 
     If ``max_combo_num`` is ``None`` all provided materials are considered.
+
     Designed to run inside a worker thread. The ``progress_cb`` receives periodic
     progress updates and best-so-far results, while ``stop_event`` allows the
     caller to request early termination from another thread.
@@ -404,3 +409,4 @@ def run_full_optimization(
         return None
     # unpack the best result
     return format_best(best)
+
