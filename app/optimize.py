@@ -258,6 +258,7 @@ def find_best_mix(
     n_restarts: int = RESTARTS,
     constraints: list[tuple[int, str, float]] | None = None,
     progress_cb: Callable[..., None] | None = None,
+
     stop_event: threading.Event | None = None,
 ):
     """Evaluate all material combinations and return the best result."""
@@ -304,6 +305,8 @@ def find_best_mix(
                 if progress_cb:
                     progress_cb(best=res, progress=i / total)
                 print("Threshold reached, stopping early.")
+                if progress_cb:
+                    progress_cb(best)
                 break
             if progress_cb and (best is None or mse_val < best[0]):
                 best = res
@@ -312,6 +315,7 @@ def find_best_mix(
                 progress_cb(progress=i / total)
         elif progress_cb:
             progress_cb(progress=i / total)
+
     print()
     if not results:
         return None
@@ -379,6 +383,7 @@ def run_full_optimization(
         if update:
             progress_cb(update)
 
+
     best = find_best_mix(
         names,
         values,
@@ -396,3 +401,4 @@ def run_full_optimization(
         return None
     # unpack the best result
     return format_best(best)
+
