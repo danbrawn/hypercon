@@ -22,6 +22,7 @@
       <button type="button" id="mat-select-all" class="btn btn-sm btn-secondary">Select All</button>
       <button type="button" id="mat-unselect-all" class="btn btn-sm btn-secondary">Unselect All</button>
       <button type="submit" id="delete-rows" class="btn btn-sm btn-danger">Delete rows</button>
+      <button type="submit" id="delete-cols" class="btn btn-sm btn-danger" formaction="{{ url_for('materials.delete_columns') }}">Delete Columns</button>
     </div>
     <table class="table table-striped" id="materials-table">
       <thead>
