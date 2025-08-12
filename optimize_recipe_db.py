@@ -4,9 +4,9 @@
 CLI tool that optimizes a recipe using database data.
 
 It loads materials from the ``materials_grit`` table, normalizes their
-profiles, derives the target profile from numeric column names, tries all
-material combinations up to ``MAX_COMPONENTS`` and uses multi-start SLSQP to
-find the best mix.
+profiles, derives the target profile from numeric column names and tries all
+combinations of the selected materials, using multi-start SLSQP to find the
+best mix.
 """
 
 import itertools
@@ -19,7 +19,6 @@ from app.optimize import (
     compute_profiles,
     etalon_from_columns,
     POWER,
-    MAX_COMPONENTS,
 )
 
 # ---- Configuration ----
@@ -56,10 +55,19 @@ def optimize_weights(values: np.ndarray, target: np.ndarray, n_restarts: int = R
     return best
 
 
-def find_best_mix(profiles: np.ndarray, target: np.ndarray, max_combo: int = MAX_COMPONENTS):
+def find_best_mix(
+    profiles: np.ndarray, target: np.ndarray, max_combo: int | None = None
+):
+    """Try all material combinations and return the lowest-MSE mix.
+
+    If ``max_combo`` is ``None`` every subset of the provided materials is
+    evaluated.
+    """
     n = profiles.shape[0]
-    combos = [c for r in range(1, min(max_combo, n) + 1)
-              for c in itertools.combinations(range(n), r)]
+    limit = n if max_combo is None else min(max_combo, n)
+    combos = [
+        c for r in range(1, limit + 1) for c in itertools.combinations(range(n), r)
+    ]
     total = len(combos)
     best = None
 
