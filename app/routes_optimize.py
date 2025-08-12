@@ -91,6 +91,7 @@ def run():
                 ),
                 202,
             )
+
     except Exception as exc:
         db.session.rollback()
         return jsonify(error=str(exc)), 500
