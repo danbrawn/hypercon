@@ -349,6 +349,12 @@ def run_full_optimization(
     # compute the mixed profile using the chosen materials
     mixed = weights.dot(values[list(combo)])
 
+    # replace NaN/Inf values so JSON serialization doesn't fail
+    weights = np.nan_to_num(weights, nan=0.0, posinf=0.0, neginf=0.0)
+    mixed = np.nan_to_num(mixed, nan=0.0, posinf=0.0, neginf=0.0)
+    target = np.nan_to_num(target, nan=0.0, posinf=0.0, neginf=0.0)
+    mse = float(np.nan_to_num(mse, nan=0.0, posinf=0.0, neginf=0.0))
+
     return {
         # Convert NumPy integer IDs to plain Python ints for JSON serialization
         'material_ids': [int(ids[i]) for i in combo],
