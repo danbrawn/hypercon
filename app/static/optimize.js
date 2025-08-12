@@ -19,8 +19,6 @@ let poller = null;
 let start = null;
 let estSeconds = 0;
 
-
-const MAX_COMBO = 7; // should mirror backend
 const SECONDS_PER_COMBO = 0.15;
 
 // prevent form submission when pressing Enter
@@ -55,14 +53,12 @@ function formatDuration(sec) {
 
 function updateEstimate() {
   const n = getSelectedIds().length;
-  const max = Math.min(MAX_COMBO, n);
   let combos = 0;
-  for (let r = 1; r <= max; r++) {
+  for (let r = 1; r <= n; r++) {
     combos += nCr(n, r);
   }
   estSeconds = combos * SECONDS_PER_COMBO;
   estSpan.textContent = `${formatDuration(estSeconds)} (${combos} combos)`;
-
 }
 
 function updateConstraintOptions() {
@@ -191,7 +187,6 @@ runBtn.addEventListener('click', e => {
     if (remaining >= 0) {
       remainingSpan.textContent = formatDuration(remaining);
     }
-
   }, 1000);
   fetch(form.action, {
     method: 'POST',
@@ -214,7 +209,6 @@ runBtn.addEventListener('click', e => {
       }
       checkStatus();
       poller = setInterval(checkStatus, 2000);
-
     })
     .catch(err => {
       console.error('Optimization error', err);
@@ -257,7 +251,6 @@ function finalize() {
   runBtn.disabled = false;
   stopBtn.classList.add('d-none');
   remainingWrap.classList.add('d-none');
-
   if (timer) clearInterval(timer);
   if (poller) clearInterval(poller);
 }
@@ -280,7 +273,6 @@ stopBtn.addEventListener('click', () => {
       console.error('Stop error', err);
       alert('Failed to stop optimization');
       finalize();
-
     });
 });
 

@@ -22,7 +22,6 @@ from . import db
 # Степента за нормализация на профилите
 # Изведена от предоставените Excel формули
 POWER = 0.217643428858232
-MAX_COMPONENTS = 7  # maximum number of materials considered in a mix
 RESTARTS = 10       # number of random restarts for SLSQP
 
 
@@ -253,7 +252,7 @@ def find_best_mix(
     values: np.ndarray,
     target: np.ndarray,
     props: list[str],
-    max_combo_num: int,
+    max_combo_num: int | None = None,
     mse_threshold: float | None = None,
     n_restarts: int = RESTARTS,
     constraints: list[tuple[int, str, float]] | None = None,
@@ -261,11 +260,16 @@ def find_best_mix(
 
     stop_event: threading.Event | None = None,
 ):
-    """Evaluate all material combinations and return the best result."""
+    """Evaluate all material combinations and return the best result.
+
+    If ``max_combo_num`` is ``None`` every subset of the provided materials is
+    examined.
+    """
 
     n = values.shape[0]
+    limit = n if max_combo_num is None else min(max_combo_num, n)
     combos: list[tuple[int, ...]] = []
-    for r in range(1, min(max_combo_num, n) + 1):
+    for r in range(1, limit + 1):
         combos.extend(itertools.combinations(range(n), r))
     total = len(combos)
 
@@ -326,8 +330,8 @@ def find_best_mix(
 def run_full_optimization(
     schema: Optional[str] = None,
     property_limit: float = 1000.0,
-    max_combo_num: int = MAX_COMPONENTS,
-    mse_threshold: float | None = 0.0002,
+    max_combo_num: int | None = None,
+    mse_threshold: float | None = 0.0004,
     material_ids: Optional[list[int]] = None,
     constraints: Optional[list[tuple[int, str, float]]] = None,
     user_id: Optional[int] = None,
@@ -335,6 +339,8 @@ def run_full_optimization(
     stop_event: threading.Event | None = None,
 ):
     """Load materials and search for the optimal mix.
+
+    If ``max_combo_num`` is ``None`` all provided materials are considered.
 
     Designed to run inside a worker thread. The ``progress_cb`` receives periodic
     progress updates and best-so-far results, while ``stop_event`` allows the
@@ -344,6 +350,9 @@ def run_full_optimization(
     ids, names, values, target, prop_cols = load_recipe_data(
         property_limit, schema, material_ids, user_id
     )
+
+    if max_combo_num is None:
+        max_combo_num = len(ids)
 
     # Map DB id -> index in arrays
     id_to_idx = {mid: i for i, mid in enumerate(ids)}
@@ -382,7 +391,6 @@ def run_full_optimization(
             update['best'] = format_best(best)
         if update:
             progress_cb(update)
-
 
     best = find_best_mix(
         names,

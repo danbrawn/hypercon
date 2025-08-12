@@ -25,6 +25,15 @@ _executor = ThreadPoolExecutor(max_workers=1)
 _jobs: dict[int, dict] = {}
 
 
+# Single-worker executor keeps CPU usage predictable and ensures only one
+# optimization runs at a time per process.
+_executor = ThreadPoolExecutor(max_workers=1)
+
+# In-memory registry of active jobs keyed by user id. Each job stores the
+# future, a stop event, progress fraction, best-so-far result, and start time.
+_jobs: dict[int, dict] = {}
+
+
 @bp.route('', methods=['GET'])
 @login_required
 def page():
@@ -85,7 +94,6 @@ def run():
             if 'progress' in update:
                 job['progress'] = update['progress']
 
-
         def task():
             with app.app_context():
                 try:
@@ -134,7 +142,6 @@ def run():
 @login_required
 def status():
     """Report progress for the current user's running job if any."""
-
     user_id = current_user.id
     job = _jobs.get(user_id)
     if not job:
@@ -156,12 +163,10 @@ def status():
 @login_required
 def stop():
     """Signal the background optimization to halt."""
-
     user_id = current_user.id
     job = _jobs.get(user_id)
     if not job:
         return jsonify(error="No running optimization"), 400
     job['stop'].set()
     return jsonify(status="stopping", result=job.get('best'))
-
 
