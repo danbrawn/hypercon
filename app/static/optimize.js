@@ -25,6 +25,7 @@ let estCombos = 0;
 // reporting work done.
 const SECONDS_PER_COMBO = 0.01;
 
+
 // prevent form submission when pressing Enter
 form.addEventListener('submit', e => e.preventDefault());
 
@@ -63,6 +64,7 @@ function updateEstimate() {
   }
   estSeconds = estCombos * SECONDS_PER_COMBO;
   estSpan.textContent = `${formatDuration(estSeconds)} (${estCombos} combos)`;
+
 }
 
 function updateConstraintOptions() {
@@ -187,6 +189,7 @@ runBtn.addEventListener('click', e => {
   timer = setInterval(() => {
     const secs = (Date.now() - start) / 1000;
     elapsedSpan.textContent = formatDuration(secs);
+
   }, 1000);
   fetch(form.action, {
     method: 'POST',
@@ -226,9 +229,7 @@ function checkStatus() {
         start = Date.now() - data.elapsed * 1000;
       }
       if (typeof data.progress === 'number' && data.progress > 0) {
-        const total = data.elapsed / data.progress;
-        estSpan.textContent = `${formatDuration(total)} (${estCombos} combos)`;
-        const remaining = total - data.elapsed;
+        const remaining = data.elapsed / data.progress - data.elapsed;
         if (!isNaN(remaining) && remaining >= 0) {
           remainingSpan.textContent = formatDuration(remaining);
         }
