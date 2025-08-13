@@ -187,7 +187,7 @@ runBtn.addEventListener('click', e => {
   timer = setInterval(() => {
     const secs = (Date.now() - start) / 1000;
     elapsedSpan.textContent = formatDuration(secs);
-  }, 1000);
+ }, 1000);
   fetch(form.action, {
     method: 'POST',
     body: formData,
