@@ -34,12 +34,21 @@ def page_materials():
     num    = sorted([c for c in cols if c.isdigit()], key=lambda x: int(x))
     columns = nonnum + num
 
+    # Determine key column for identifying rows (id, material_name, or first col)
+    if "id" in cols:
+        keycol = "id"
+    elif "material_name" in cols:
+        keycol = "material_name"
+    else:
+        keycol = cols[0]
+
     return render_template(
         "materials.html",
         schema=current_schema,
         table_name=table_name,
         columns=columns,
-        rows=rows
+        rows=rows,
+        keycol=keycol,
     )
 
 @bp.route("/materials/import", methods=["POST"])
@@ -158,7 +167,15 @@ def delete_rows():
     ids = request.form.getlist("ids")
     if ids:
         tbl = get_materials_table()
-        db.session.execute(tbl.delete().where(tbl.c.id.in_(map(int, ids))))
+        cols = list(tbl.columns.keys())
+        if "id" in cols:
+            keycol = "id"
+            ids = list(map(int, ids))
+        elif "material_name" in cols:
+            keycol = "material_name"
+        else:
+            keycol = cols[0]
+        db.session.execute(tbl.delete().where(tbl.c[keycol].in_(ids)))
         db.session.commit()
         flash(f"Deleted {len(ids)} rows.", "success")
     return redirect(url_for("materials.page_materials"))
