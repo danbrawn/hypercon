@@ -60,6 +60,15 @@ _executor = ThreadPoolExecutor(max_workers=1)
 _jobs: dict[int, dict] = {}
 
 
+# Single-worker executor keeps CPU usage predictable and ensures only one
+# optimization runs at a time per process.
+_executor = ThreadPoolExecutor(max_workers=1)
+
+# In-memory registry of active jobs keyed by user id. Each job stores the
+# future, a stop event, progress fraction, best-so-far result, and start time.
+_jobs: dict[int, dict] = {}
+
+
 @bp.route('', methods=['GET'])
 @login_required
 def page():
@@ -141,10 +150,17 @@ def run():
                         for name, weight in zip(result["material_names"], result["weights"])
                     ]
                     tbl = _get_results_table(schema)
+                    # Serialize the materials list to JSON before inserting so the database
+                    # always receives a valid JSON string regardless of backend driver.
                     db.session.execute(
-                        tbl.insert().values(mse=result["best_mse"], materials=materials)
+                        tbl.insert().values(
+                            mse=float(result["best_mse"]),
+                            materials=json.dumps(materials),
+                        )
                     )
                     db.session.commit()
+                    # Return result with original Python structure
+                    result["materials"] = materials
                     return result
                 except Exception:
                     db.session.rollback()
