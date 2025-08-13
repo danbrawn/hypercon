@@ -8,11 +8,19 @@ import time
 import threading
 
 from . import db
-from .optimize import run_full_optimization, _get_materials_table
-from .models import ResultsRecipe
+from .optimize import run_full_optimization, _get_materials_table, _get_results_table
 
 bp = Blueprint('optimize_bp', __name__)
 _executor = ThreadPoolExecutor(max_workers=1)
+_jobs: dict[int, dict] = {}
+
+
+# Single-worker executor keeps CPU usage predictable and ensures only one
+# optimization runs at a time per process.
+_executor = ThreadPoolExecutor(max_workers=1)
+
+# In-memory registry of active jobs keyed by user id. Each job stores the
+# future, a stop event, progress fraction, best-so-far result, and start time.
 _jobs: dict[int, dict] = {}
 
 
@@ -132,7 +140,10 @@ def run():
                         {"name": name, "percent": float(weight)}
                         for name, weight in zip(result["material_names"], result["weights"])
                     ]
-                    db.session.add(ResultsRecipe(mse=result["best_mse"], materials=materials))
+                    tbl = _get_results_table(schema)
+                    db.session.execute(
+                        tbl.insert().values(mse=result["best_mse"], materials=materials)
+                    )
                     db.session.commit()
                     return result
                 except Exception:
