@@ -34,6 +34,15 @@ _executor = ThreadPoolExecutor(max_workers=1)
 _jobs: dict[int, dict] = {}
 
 
+# Single-worker executor keeps CPU usage predictable and ensures only one
+# optimization runs at a time per process.
+_executor = ThreadPoolExecutor(max_workers=1)
+
+# In-memory registry of active jobs keyed by user id. Each job stores the
+# future, a stop event, progress fraction, best-so-far result, and start time.
+_jobs: dict[int, dict] = {}
+
+
 @bp.route('', methods=['GET'])
 @login_required
 def page():

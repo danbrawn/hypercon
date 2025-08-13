@@ -18,8 +18,13 @@ let timer = null;
 let poller = null;
 let start = null;
 let estSeconds = 0;
+let estCombos = 0;
 
-const SECONDS_PER_COMBO = 0.15;
+// Initial guess for how long each combination takes. A more accurate
+// estimate will be computed from real progress once the backend starts
+// reporting work done.
+const SECONDS_PER_COMBO = 0.01;
+
 
 // prevent form submission when pressing Enter
 form.addEventListener('submit', e => e.preventDefault());
@@ -53,12 +58,13 @@ function formatDuration(sec) {
 
 function updateEstimate() {
   const n = getSelectedIds().length;
-  let combos = 0;
+  estCombos = 0;
   for (let r = 1; r <= n; r++) {
-    combos += nCr(n, r);
+    estCombos += nCr(n, r);
   }
-  estSeconds = combos * SECONDS_PER_COMBO;
-  estSpan.textContent = `${formatDuration(estSeconds)} (${combos} combos)`;
+  estSeconds = estCombos * SECONDS_PER_COMBO;
+  estSpan.textContent = `${formatDuration(estSeconds)} (${estCombos} combos)`;
+
 }
 
 function updateConstraintOptions() {
@@ -183,10 +189,7 @@ runBtn.addEventListener('click', e => {
   timer = setInterval(() => {
     const secs = (Date.now() - start) / 1000;
     elapsedSpan.textContent = formatDuration(secs);
-    const remaining = estSeconds - secs;
-    if (remaining >= 0) {
-      remainingSpan.textContent = formatDuration(remaining);
-    }
+
   }, 1000);
   fetch(form.action, {
     method: 'POST',
