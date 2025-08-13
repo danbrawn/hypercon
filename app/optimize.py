@@ -3,11 +3,12 @@
 import itertools
 import numpy as np
 import pandas as pd
+import threading
 
 from sqlalchemy import MetaData, Table, select
 from flask import session, has_request_context
 from flask_login import current_user
-from typing import Optional
+from typing import Optional, Callable
 import re
 import itertools
 
@@ -21,7 +22,6 @@ from . import db
 # Степента за нормализация на профилите
 # Изведена от предоставените Excel формули
 POWER = 0.217643428858232
-MAX_COMPONENTS = 7  # maximum number of materials considered in a mix
 RESTARTS = 10       # number of random restarts for SLSQP
 
 
@@ -52,6 +52,18 @@ def _get_materials_table(schema: Optional[str] = None):
         sch = 'main'
     meta = MetaData()
     return Table('materials_grit', meta, schema=sch, autoload_with=db.engine)
+
+
+def _get_results_table(schema: Optional[str] = None):
+    """Return the results table for the active client schema."""
+    if schema:
+        sch = schema
+    elif has_request_context() and getattr(current_user, 'role', None) == 'operator':
+        sch = session.get('schema', 'main')
+    else:
+        sch = 'main'
+    meta = MetaData()
+    return Table('results_recipe', meta, schema=sch, autoload_with=db.engine)
 
 def load_data(schema: Optional[str] = None, user_id: Optional[int] = None):
     tbl = _get_materials_table(schema)
@@ -252,25 +264,33 @@ def find_best_mix(
     values: np.ndarray,
     target: np.ndarray,
     props: list[str],
-    max_combo_num: int,
+    max_combo_num: int | None = None,
     mse_threshold: float | None = None,
     n_restarts: int = RESTARTS,
     constraints: list[tuple[int, str, float]] | None = None,
+    progress_cb: Callable[..., None] | None = None,
+    stop_event: threading.Event | None = None,
 ):
-    """Evaluate all material combinations and return the best result."""
+    """Evaluate all material combinations and return the best result.
+
+    If ``max_combo_num`` is ``None`` every subset of the provided materials is
+    examined.
+    """
 
     n = values.shape[0]
+    limit = n if max_combo_num is None else min(max_combo_num, n)
     combos: list[tuple[int, ...]] = []
-    for r in range(1, min(max_combo_num, n) + 1):
+    for r in range(1, limit + 1):
         combos.extend(itertools.combinations(range(n), r))
     total = len(combos)
 
     best = None
     results: list[tuple[float, tuple[int, ...], np.ndarray]] = []
     for i, combo in enumerate(combos, 1):
+        if stop_event and stop_event.is_set():
+            break
         # Provide simple console progress so operators can observe search evolution
         print(f"Progress: {i}/{total} combinations ({(i/total)*100:.1f}% done)")
-
 
         # Skip combos that don't contain materials from equality/">" constraints
         if constraints:
@@ -280,6 +300,8 @@ def find_best_mix(
                 if op in ('=', '>')
             }
             if not required.issubset(set(combo)):
+                if progress_cb:
+                    progress_cb(progress=i / total)
                 continue
 
         res = optimize_combo(combo, values, target, n_restarts, constraints)
@@ -295,8 +317,17 @@ def find_best_mix(
             )
             if mse_threshold is not None and mse_val <= mse_threshold:
                 best = res
+                if progress_cb:
+                    progress_cb(best=res, progress=i / total)
                 print("Threshold reached, stopping early.")
                 break
+            if progress_cb and (best is None or mse_val < best[0]):
+                best = res
+                progress_cb(best=res, progress=i / total)
+            elif progress_cb:
+                progress_cb(progress=i / total)
+        elif progress_cb:
+            progress_cb(progress=i / total)
     print()
     if not results:
         return None
@@ -307,17 +338,28 @@ def find_best_mix(
 def run_full_optimization(
     schema: Optional[str] = None,
     property_limit: float = 1000.0,
-    max_combo_num: int = MAX_COMPONENTS,
+    max_combo_num: int | None = None,
     mse_threshold: float | None = 0.0004,
     material_ids: Optional[list[int]] = None,
     constraints: Optional[list[tuple[int, str, float]]] = None,
     user_id: Optional[int] = None,
+    progress_cb: Callable[[dict], None] | None = None,
+    stop_event: threading.Event | None = None,
 ):
-    """Load materials and search for the optimal mix."""
+    """Load materials and search for the optimal mix.
+
+    If ``max_combo_num`` is ``None`` all provided materials are considered.
+    Designed to run inside a worker thread. The ``progress_cb`` receives periodic
+    progress updates and best-so-far results, while ``stop_event`` allows the
+    caller to request early termination from another thread.
+    """
 
     ids, names, values, target, prop_cols = load_recipe_data(
         property_limit, schema, material_ids, user_id
     )
+
+    if max_combo_num is None:
+        max_combo_num = len(ids)
 
     # Map DB id -> index in arrays
     id_to_idx = {mid: i for i, mid in enumerate(ids)}
@@ -326,6 +368,36 @@ def run_full_optimization(
         for mid, op, val in constraints:
             if mid in id_to_idx:
                 constr_idx.append((id_to_idx[mid], op, float(val)))
+
+    def format_best(best_tuple):
+        mse, combo, weights = best_tuple
+        mse = float(mse)
+        weights = np.asarray(weights, dtype=float)
+        mixed = weights.dot(values[list(combo)])
+        weights = np.nan_to_num(weights, nan=0.0, posinf=0.0, neginf=0.0)
+        mixed = np.nan_to_num(mixed, nan=0.0, posinf=0.0, neginf=0.0)
+        tgt = np.nan_to_num(target, nan=0.0, posinf=0.0, neginf=0.0)
+        mse = float(np.nan_to_num(mse, nan=0.0, posinf=0.0, neginf=0.0))
+        return {
+            'material_ids': [int(ids[i]) for i in combo],
+            'material_names': [str(names[i]) for i in combo],
+            'weights': weights.tolist(),
+            'best_mse': mse,
+            'prop_columns': list(map(str, prop_cols)),
+            'target_profile': tgt.tolist(),
+            'mixed_profile': mixed.tolist(),
+        }
+
+    def progress_wrapper(*, progress: float | None = None, best: tuple | None = None):
+        if not progress_cb:
+            return
+        update: dict = {}
+        if progress is not None:
+            update['progress'] = float(progress)
+        if best is not None:
+            update['best'] = format_best(best)
+        if update:
+            progress_cb(update)
 
     best = find_best_mix(
         names,
@@ -336,26 +408,11 @@ def run_full_optimization(
         mse_threshold,
         RESTARTS,
         constr_idx,
+        progress_cb=progress_wrapper,
+        stop_event=stop_event,
     )
 
     if not best:
         return None
     # unpack the best result
-    mse, combo, weights = best
-    # ensure plain Python types for JSON serialization
-    mse = float(mse)
-    weights = np.asarray(weights, dtype=float)
-
-    # compute the mixed profile using the chosen materials
-    mixed = weights.dot(values[list(combo)])
-
-    return {
-        # Convert NumPy integer IDs to plain Python ints for JSON serialization
-        'material_ids': [int(ids[i]) for i in combo],
-        'material_names': [str(names[i]) for i in combo],
-        'weights':      weights.tolist(),
-        'best_mse':     mse,
-        'prop_columns': list(map(str, prop_cols)),
-        'target_profile': target.tolist(),
-        'mixed_profile':  mixed.tolist(),
-    }
+    return format_best(best)

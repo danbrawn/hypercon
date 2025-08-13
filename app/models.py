@@ -49,16 +49,7 @@ class MaterialGrit(db.Model):
     # You *do not* have to declare them here; instead you'll do:
     #
     #    from sqlalchemy import Table, MetaData
-    #    meta  = MetaData(bind=db.get_engine())
-    #    table = Table('materials_grit', meta, autoload_with=db.get_engine(), schema='main')
-    #
-    # and then reference table.c['0.12'], etc.
-
-
-class ResultsRecipe(db.Model):
-    __tablename__ = "results_recipe"
-
-    id = db.Column(db.Integer, primary_key=True)
-    dateref = db.Column(db.DateTime, nullable=False, server_default=db.func.now())
-    mse = db.Column(db.Float, nullable=False)
-    materials = db.Column(db.JSON, nullable=False)  # list of {name, percent}
+#    meta  = MetaData(bind=db.get_engine())
+#    table = Table('materials_grit', meta, autoload_with=db.get_engine(), schema='main')
+#
+# and then reference table.c['0.12'], etc.
