@@ -79,6 +79,15 @@ _executor = ThreadPoolExecutor(max_workers=1)
 _jobs: dict[int, dict] = {}
 
 
+# Single-worker executor keeps CPU usage predictable and ensures only one
+# optimization runs at a time per process.
+_executor = ThreadPoolExecutor(max_workers=1)
+
+# In-memory registry of active jobs keyed by user id. Each job stores the
+# future, a stop event, progress fraction, best-so-far result, and start time.
+_jobs: dict[int, dict] = {}
+
+
 @bp.route('', methods=['GET'])
 @login_required
 def page():
@@ -140,7 +149,7 @@ def run():
 
         def task():
             with app.app_context():
-               result = run_full_optimization(
+                result = run_full_optimization(
                     schema=schema,
                     material_ids=material_ids,
                     constraints=[(int(c['id']), c['op'], float(c['val'])) for c in constr]
@@ -202,13 +211,23 @@ def status():
         result = job.get('result') or job.get('best')
         _jobs.pop(user_id, None)
         if result:
-            return jsonify(status="done", elapsed=elapsed, progress=1.0, result=result)
-        return jsonify(status="error", elapsed=elapsed, progress=job.get('progress', 0.0))
+            return jsonify(
+                status="done", elapsed=elapsed, progress=1.0, result=result
+            )
+        return jsonify(
+            status="error", elapsed=elapsed, progress=job.get("progress", 0.0)
+        )
 
-    return jsonify(status="running", elapsed=elapsed, progress=job.get('progress', 0.0), best=job.get('best'))
+    return jsonify(
+        status="running",
+        elapsed=elapsed,
+        progress=job.get("progress", 0.0),
+        best=job.get("best"),
+    )
 
 
-@bp.route('/stop', methods=['POST'])
+@bp.route("/stop", methods=["POST"])
+
 @login_required
 def stop():
     """Signal the background optimization to halt."""
@@ -216,6 +235,7 @@ def stop():
     job = _jobs.get(user_id)
     if not job:
         return jsonify(error="No running optimization"), 400
-    job['stop'].set()
-    return jsonify(status="stopping", result=job.get('best'))
+    job["stop"].set()
+    return jsonify(status="stopping", result=job.get("best"))
+
 
