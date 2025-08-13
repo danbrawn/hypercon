@@ -12,6 +12,72 @@ from . import db
 from .optimize import run_full_optimization, _get_materials_table, _get_results_table
 
 bp = Blueprint('optimize_bp', __name__)
+_executor = ThreadPoolExecutor(max_workers=1)
+_jobs: dict[int, dict] = {}
+
+
+# Single-worker executor keeps CPU usage predictable and ensures only one
+# optimization runs at a time per process.
+_executor = ThreadPoolExecutor(max_workers=1)
+
+# In-memory registry of active jobs keyed by user id. Each job stores the
+# future, a stop event, progress fraction, best-so-far result, and start time.
+_jobs: dict[int, dict] = {}
+
+
+# Single-worker executor keeps CPU usage predictable and ensures only one
+# optimization runs at a time per process.
+_executor = ThreadPoolExecutor(max_workers=1)
+
+# In-memory registry of active jobs keyed by user id. Each job stores the
+# future, a stop event, progress fraction, best-so-far result, and start time.
+_jobs: dict[int, dict] = {}
+
+
+# Single-worker executor keeps CPU usage predictable and ensures only one
+# optimization runs at a time per process.
+_executor = ThreadPoolExecutor(max_workers=1)
+
+# In-memory registry of active jobs keyed by user id. Each job stores the
+# future, a stop event, progress fraction, best-so-far result, and start time.
+_jobs: dict[int, dict] = {}
+
+
+# Single-worker executor keeps CPU usage predictable and ensures only one
+# optimization runs at a time per process.
+_executor = ThreadPoolExecutor(max_workers=1)
+
+# In-memory registry of active jobs keyed by user id. Each job stores the
+# future, a stop event, progress fraction, best-so-far result, and start time.
+_jobs: dict[int, dict] = {}
+
+
+# Single-worker executor keeps CPU usage predictable and ensures only one
+# optimization runs at a time per process.
+_executor = ThreadPoolExecutor(max_workers=1)
+
+# In-memory registry of active jobs keyed by user id. Each job stores the
+# future, a stop event, progress fraction, best-so-far result, and start time.
+_jobs: dict[int, dict] = {}
+
+
+# Single-worker executor keeps CPU usage predictable and ensures only one
+# optimization runs at a time per process.
+_executor = ThreadPoolExecutor(max_workers=1)
+
+# In-memory registry of active jobs keyed by user id. Each job stores the
+# future, a stop event, progress fraction, best-so-far result, and start time.
+_jobs: dict[int, dict] = {}
+
+
+# Single-worker executor keeps CPU usage predictable and ensures only one
+# optimization runs at a time per process.
+_executor = ThreadPoolExecutor(max_workers=1)
+
+# In-memory registry of active jobs keyed by user id. Each job stores the
+# future, a stop event, progress fraction, best-so-far result, and start time.
+_jobs: dict[int, dict] = {}
+
 
 # Single-worker executor keeps CPU usage predictable and ensures only one
 # optimization runs at a time per process.
@@ -113,7 +179,6 @@ def run():
                 # Return result with original Python structure
                 result["materials"] = materials
                 return result
-
         future = _executor.submit(task)
         job['future'] = future
 
@@ -162,6 +227,7 @@ def status():
 
 
 @bp.route("/stop", methods=["POST"])
+
 @login_required
 def stop():
     """Signal the background optimization to halt."""
@@ -171,4 +237,5 @@ def stop():
         return jsonify(error="No running optimization"), 400
     job["stop"].set()
     return jsonify(status="stopping", result=job.get("best"))
+
 
