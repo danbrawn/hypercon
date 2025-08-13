@@ -3,7 +3,7 @@
 from flask import Blueprint, render_template, jsonify, request, session, current_app
 from flask_login import login_required, current_user
 from sqlalchemy import select, text
-
+from sqlalchemy.exc import IntegrityError
 from concurrent.futures import ThreadPoolExecutor
 import time
 import threading
@@ -12,9 +12,17 @@ import json
 from . import db
 from .optimize import run_full_optimization, _get_materials_table
 
-
 bp = Blueprint('optimize_bp', __name__)
 _executor = ThreadPoolExecutor(max_workers=1)
+_jobs: dict[int, dict] = {}
+
+
+# Single-worker executor keeps CPU usage predictable and ensures only one
+# optimization runs at a time per process.
+_executor = ThreadPoolExecutor(max_workers=1)
+
+# In-memory registry of active jobs keyed by user id. Each job stores the
+# future, a stop event, progress fraction, best-so-far result, and start time.
 _jobs: dict[int, dict] = {}
 
 
@@ -178,21 +186,39 @@ def run():
                     for name, weight in zip(result["material_names"], result["weights"])
                 ]
                 # Persist result in the client-specific schema table.
-                with db.engine.begin() as conn:
-                    conn.execute(
-                        text(
-                            "INSERT INTO {}.results_recipe (mse, materials) "
-                            "VALUES (:mse, :materials)".format(schema)
-                        ),
-                        {
-                            "mse": float(result["best_mse"]),
-                            "materials": json.dumps(materials),
-                        },
-
-                    )
+                stmt = text(
+                    "INSERT INTO {}.results_recipe (mse, materials) "
+                    "VALUES (:mse, :materials)".format(schema)
+                )
+                params = {
+                    "mse": float(result["best_mse"]),
+                    "materials": json.dumps(materials),
+                }
+                with db.engine.connect() as conn:
+                    trans = conn.begin()
+                    try:
+                        conn.execute(stmt, params)
+                        trans.commit()
+                    except IntegrityError as err:
+                        trans.rollback()
+                        if getattr(getattr(err, "orig", None), "pgcode", None) == "23505":
+                            # Sequence is out of sync; align it with the current max(id)
+                            seq_sql = text(
+                                "SELECT setval(pg_get_serial_sequence(:tbl, 'id'), "
+                                "(SELECT COALESCE(MAX(id), 0) FROM {}.results_recipe))".format(
+                                    schema
+                                )
+                            )
+                            conn.execute(seq_sql, {"tbl": f"{schema}.results_recipe"})
+                            trans2 = conn.begin()
+                            conn.execute(stmt, params)
+                            trans2.commit()
+                        else:
+                            raise
                 # Return result with original Python structure
                 result["materials"] = materials
                 return result
+
         future = _executor.submit(task)
         job['future'] = future
 
@@ -250,5 +276,4 @@ def stop():
         return jsonify(error="No running optimization"), 400
     job["stop"].set()
     return jsonify(status="stopping", result=job.get("best"))
-
 
