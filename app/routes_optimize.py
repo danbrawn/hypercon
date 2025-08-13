@@ -2,17 +2,28 @@
 
 from flask import Blueprint, render_template, jsonify, request, session, current_app
 from flask_login import login_required, current_user
-from sqlalchemy import select
+from sqlalchemy import select, text
+
 from concurrent.futures import ThreadPoolExecutor
 import time
 import threading
 import json
 
 from . import db
-from .optimize import run_full_optimization, _get_materials_table, _get_results_table
+from .optimize import run_full_optimization, _get_materials_table
+
 
 bp = Blueprint('optimize_bp', __name__)
 _executor = ThreadPoolExecutor(max_workers=1)
+_jobs: dict[int, dict] = {}
+
+
+# Single-worker executor keeps CPU usage predictable and ensures only one
+# optimization runs at a time per process.
+_executor = ThreadPoolExecutor(max_workers=1)
+
+# In-memory registry of active jobs keyed by user id. Each job stores the
+# future, a stop event, progress fraction, best-so-far result, and start time.
 _jobs: dict[int, dict] = {}
 
 
@@ -166,15 +177,18 @@ def run():
                     {"name": name, "percent": float(weight)}
                     for name, weight in zip(result["material_names"], result["weights"])
                 ]
-                tbl = _get_results_table(schema)
-                # Serialize the materials list to JSON before inserting so the database
-                # always receives a valid JSON string regardless of backend driver.
+                # Persist result in the client-specific schema table.
                 with db.engine.begin() as conn:
                     conn.execute(
-                        tbl.insert().values(
-                            mse=float(result["best_mse"]),
-                            materials=json.dumps(materials),
-                        )
+                        text(
+                            "INSERT INTO {}.results_recipe (mse, materials) "
+                            "VALUES (:mse, :materials)".format(schema)
+                        ),
+                        {
+                            "mse": float(result["best_mse"]),
+                            "materials": json.dumps(materials),
+                        },
+
                     )
                 # Return result with original Python structure
                 result["materials"] = materials
@@ -227,7 +241,6 @@ def status():
 
 
 @bp.route("/stop", methods=["POST"])
-
 @login_required
 def stop():
     """Signal the background optimization to halt."""
