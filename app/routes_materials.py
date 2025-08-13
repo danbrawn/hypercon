@@ -4,6 +4,7 @@ from sqlalchemy import MetaData, Table, select, text
 from . import db
 from flask_login import current_user, login_required
 import re
+from numbers import Number
 
 bp = Blueprint("materials", __name__)
 
@@ -118,6 +119,13 @@ def import_excel():
         if "user_id" in cols:
             data["user_id"] = getattr(current_user, "id", None)
 
+        # Round all numeric values (except identifiers and key) to three decimals
+        exclusions = {"id", "user_id", keycol}
+        data = {
+            k: (round(float(v), 3) if k not in exclusions and isinstance(v, Number) else v)
+            for k, v in data.items()
+        }
+
         key = data.get(keycol)
         if key is None:
             continue
@@ -153,4 +161,21 @@ def delete_rows():
         db.session.execute(tbl.delete().where(tbl.c.id.in_(map(int, ids))))
         db.session.commit()
         flash(f"Deleted {len(ids)} rows.", "success")
+    return redirect(url_for("materials.page_materials"))
+
+
+@bp.route("/materials/delete-columns", methods=["POST"])
+@login_required
+def delete_columns():
+    tbl = get_materials_table()
+    keep = {"id", "material_name"}
+    cols = [c for c in tbl.columns.keys() if c not in keep]
+    for col in cols:
+        ddl = text(
+            f'ALTER TABLE "{tbl.schema}"."{tbl.name}" DROP COLUMN "{col}"'
+        )
+        db.session.execute(ddl)
+    if cols:
+        db.session.commit()
+        flash(f"Deleted {len(cols)} columns.", "success")
     return redirect(url_for("materials.page_materials"))
