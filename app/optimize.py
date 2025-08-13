@@ -53,6 +53,18 @@ def _get_materials_table(schema: Optional[str] = None):
     meta = MetaData()
     return Table('materials_grit', meta, schema=sch, autoload_with=db.engine)
 
+
+def _get_results_table(schema: Optional[str] = None):
+    """Return the results table for the active client schema."""
+    if schema:
+        sch = schema
+    elif has_request_context() and getattr(current_user, 'role', None) == 'operator':
+        sch = session.get('schema', 'main')
+    else:
+        sch = 'main'
+    meta = MetaData()
+    return Table('results_recipe', meta, schema=sch, autoload_with=db.engine)
+
 def load_data(schema: Optional[str] = None, user_id: Optional[int] = None):
     tbl = _get_materials_table(schema)
     # pick numeric columns
@@ -257,7 +269,6 @@ def find_best_mix(
     n_restarts: int = RESTARTS,
     constraints: list[tuple[int, str, float]] | None = None,
     progress_cb: Callable[..., None] | None = None,
-
     stop_event: threading.Event | None = None,
 ):
     """Evaluate all material combinations and return the best result.
