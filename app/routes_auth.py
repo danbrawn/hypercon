@@ -34,3 +34,12 @@ def logout():
     session.pop("schema", None)
     flash("Logged out successfully.", "info")
     return redirect(url_for("auth.login"))
+
+
+@bp.route("/tetris", methods=["GET","POST"])
+def tetris():
+    if current_user.is_authenticated:
+        render_template("tetris.html")
+    else:
+        return redirect(url_for("auth.login"))
+
