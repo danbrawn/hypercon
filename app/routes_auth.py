@@ -36,7 +36,7 @@ def logout():
     return redirect(url_for("auth.login"))
 
 
-@bp.route("/tetris", methods=["GET","POST"])
+@bp.route("/tetris")
 def tetris():
     if current_user.is_authenticated:
         render_template("tetris.html")
